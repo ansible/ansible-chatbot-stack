@@ -1,0 +1,80 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ansible-chatbot-pvc
+  # TODO: Use proper value or delete namespace here.
+  namespace: romartin-chatbot-stack
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: ansible-chatbot-server-env-properties
+  # TODO: Use proper value or delete namespace here.
+  namespace: romartin-chatbot-stack
+immutable: false
+data:
+  ANSIBLE_CHATBOT_IMAGE_TAG: "aap-0.2.7"
+  INFERENCE_MODEL: "granite-3.3-8b-instruct"
+  LLAMA_STACK_PORT: '8321'
+  # TODO: Use Secrets instead.
+  VLLM_API_TOKEN: ""
+  # TODO: Use Secrets instead.
+  VLLM_URL: ''
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ansible-chatbot-server
+  # TODO: Use proper value or delete namespace here.
+  namespace: romartin-chatbot-stack
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ansible-chatbot
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ansible-chatbot
+    spec:
+      containers:
+      - name: ansible-chatbot
+        # TODO: Just using a temporal container. Change it to the final one, with access controls.
+        image: quay.io/romartin/ansible-chatbot:aap-0.2.7
+        imagePullPolicy: IfNotPresent
+        envFrom:
+          - configMapRef:
+              name: "ansible-chatbot-server-env-properties"
+        command: ["python", "-m", "llama_stack.distribution.server.server", "--config", "/.llama/distributions/ansible-chatbot/ansible-chatbot-run.yaml"]
+        ports:
+          - containerPort: 5000
+        volumeMounts:
+          - name: ansible-chatbot-storage
+            # TODO?? mountPath: /root/.llama
+            mountPath: /.llama
+      volumes:
+      - name: ansible-chatbot-storage
+        persistentVolumeClaim:
+          claimName: ansible-chatbot-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ansible-chatbot-service
+  # TODO: Use proper value or delete namespace here.
+  namespace: romartin-chatbot-stack
+spec:
+  selector:
+    app.kubernetes.io/name: ansible-chatbot
+  ports:
+  - protocol: TCP
+    port: 5000
+    targetPort: 5000
+  type: ClusterIP
