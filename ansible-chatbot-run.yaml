@@ -28,7 +28,7 @@ providers:
       kvstore:
         type: sqlite
         namespace: null
-        db_path: ${env.SQLITE_STORE_DIR:/.llama/distributions/ansible-chatbot}/aap_faiss_store.db
+        db_path: ${env.SQLITE_STORE_DIR:/.llama/data/distributions/ansible-chatbot}/aap_faiss_store.db
   safety:
   - provider_id: llama-guard
     provider_type: inline::llama-guard
@@ -75,7 +75,7 @@ providers:
       persistence_store:
         type: sqlite
         namespace: null
-        db_path: ${env.SQLITE_STORE_DIR:/.llama/distributions/ansible-chatbot}/agents_store.db
+        db_path: ${env.SQLITE_STORE_DIR:/.llama/data/distributions/ansible-chatbot}/agents_store.db
   datasetio:
   - provider_id: localfs
     provider_type: inline::localfs
@@ -83,14 +83,14 @@ providers:
       kvstore:
         type: sqlite
         namespace: null
-        db_path: ${env.SQLITE_STORE_DIR:/.llama/distributions/ansible-chatbot}/localfs_datasetio.db
+        db_path: ${env.SQLITE_STORE_DIR:/.llama/data/distributions/ansible-chatbot}/localfs_datasetio.db
   telemetry:
   - provider_id: meta-reference
     provider_type: inline::meta-reference
     config:
       service_name: ${env.OTEL_SERVICE_NAME:}
       sinks: ${env.TELEMETRY_SINKS:console,sqlite}
-      sqlite_db_path: ${env.SQLITE_STORE_DIR:/.llama/distributions/ansible-chatbot}/trace_store.db
+      sqlite_db_path: ${env.SQLITE_STORE_DIR:/.llama/data/distributions/ansible-chatbot}/trace_store.db
   tool_runtime:
   - provider_id: rag-runtime
     provider_type: inline::rag-runtime

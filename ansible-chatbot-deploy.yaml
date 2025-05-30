@@ -47,17 +47,20 @@ spec:
       containers:
       - name: ansible-chatbot
         # TODO: Just using a temporal container. Change it to the final one, with access controls.
-        image: quay.io/romartin/ansible-chatbot:aap-0.2.7
+        image: quay.io/manstis/ansible-chatbot:aap-0.2.7
         imagePullPolicy: IfNotPresent
+        env:
+          - name: LLAMA_STACK_CONFIG_DIR
+            value: /.llama/data/
         envFrom:
           - configMapRef:
               name: "ansible-chatbot-server-env-properties"
         command: ["python", "-m", "llama_stack.distribution.server.server", "--config", "/.llama/distributions/ansible-chatbot/ansible-chatbot-run.yaml"]
         ports:
-          - containerPort: 5000
+          - containerPort: 8321
         volumeMounts:
           - name: ansible-chatbot-storage
-            mountPath: /root/.llama
+            mountPath: /.llama/data
       volumes:
       - name: ansible-chatbot-storage
         persistentVolumeClaim:
