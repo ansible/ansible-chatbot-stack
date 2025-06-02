@@ -3,8 +3,6 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: ansible-chatbot-pvc
-  # TODO: Use proper value or delete namespace here.
-  namespace: romartin-chatbot-stack
 spec:
   accessModes:
     - ReadWriteOnce
@@ -16,8 +14,6 @@ kind: ConfigMap
 apiVersion: v1
 metadata:
   name: ansible-chatbot-server-env-properties
-  # TODO: Use proper value or delete namespace here.
-  namespace: romartin-chatbot-stack
 immutable: false
 data:
   ANSIBLE_CHATBOT_IMAGE_TAG: "aap-0.2.7"
@@ -32,8 +28,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: ansible-chatbot-server
-  # TODO: Use proper value or delete namespace here.
-  namespace: romartin-chatbot-stack
 spec:
   replicas: 1
   selector:
@@ -44,10 +38,11 @@ spec:
       labels:
         app.kubernetes.io/name: ansible-chatbot
     spec:
+      imagePullSecrets:
+      - name: quay-pull-secret
       containers:
       - name: ansible-chatbot
-        # TODO: Just using a temporal container. Change it to the final one, with access controls.
-        image: quay.io/manstis/ansible-chatbot:aap-0.2.7
+        image: ansible-chatbot:aap-0.2.7
         imagePullPolicy: IfNotPresent
         env:
           - name: LLAMA_STACK_CONFIG_DIR
@@ -55,7 +50,6 @@ spec:
         envFrom:
           - configMapRef:
               name: "ansible-chatbot-server-env-properties"
-        command: ["/bin/bash", "/.llama/temp/bootstrap.sh"]
         ports:
           - containerPort: 8321
         volumeMounts:
@@ -70,8 +64,6 @@ apiVersion: v1
 kind: Service
 metadata:
   name: ansible-chatbot-service
-  # TODO: Use proper value or delete namespace here.
-  namespace: romartin-chatbot-stack
 spec:
   selector:
     app.kubernetes.io/name: ansible-chatbot

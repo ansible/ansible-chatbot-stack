@@ -1,4 +1,5 @@
 # Copy RAG database to PVC
+mkdir -p /.llama/data/distributions/ansible-chatbot
 cp /.llama/temp/aap_faiss_store.db /.llama/data/distributions/ansible-chatbot
 
 # Start llama-stack server
