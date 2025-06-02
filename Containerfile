@@ -14,3 +14,5 @@ RUN mkdir -p /.llama/temp
 ADD bootstrap.sh /.llama/temp
 RUN chmod +x /.llama/temp/bootstrap.sh
 ADD aap_faiss_store.db /.llama/temp
+
+ENTRYPOINT ["/bin/bash", "/.llama/temp/bootstrap.sh"]
