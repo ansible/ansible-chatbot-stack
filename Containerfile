@@ -1,14 +1,8 @@
+ARG ANSIBLE_CHATBOT_BASE_IMAGE=ansible-chatbot-stack-base
 ARG LLAMA_STACK_VERSION=0.2.9
-FROM ansible-chatbot-stack-base:${LLAMA_STACK_VERSION}
+FROM ${ANSIBLE_CHATBOT_BASE_IMAGE}:${LLAMA_STACK_VERSION}
 
 RUN mkdir -p /.llama/distributions/ansible-chatbot
 ADD ansible-chatbot-run.yaml /.llama/distributions/ansible-chatbot
 
-# Temporary workaround for k8s deployments
-# We mount a PVC at /.llama/data and so the above _copy_ is hidden, masked by the PVC mount
-# When the container starts we copy this temp file to the PVC
-RUN mkdir -p /.llama/temp
-ADD bootstrap.sh /.llama/temp
-RUN chmod +x /.llama/temp/bootstrap.sh
-
-ENTRYPOINT ["/bin/sh", "/.llama/temp/bootstrap.sh"]
+ENTRYPOINT ["python", "-m", "llama_stack.distribution.server.server", "--config", "/.llama/distributions/ansible-chatbot/ansible-chatbot-run.yaml"]

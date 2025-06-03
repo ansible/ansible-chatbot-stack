@@ -2,8 +2,7 @@
 
 # Default values for environment variables
 QUAY_ORG ?=
-LLAMA_STACK_PYPI_VERSION ?=
-ANSIBLE_CHATBOT_STACK_VERSION ?=
+ANSIBLE_CHATBOT_VERSION ?=
 ANSIBLE_CHATBOT_VLLM_URL ?=
 ANSIBLE_CHATBOT_VLLM_API_TOKEN ?=
 ANSIBLE_CHATBOT_INFERENCE_MODEL ?=
@@ -15,14 +14,14 @@ CONTAINER_DB_PATH ?= /.llama/data/distributions/ansible-chatbot
 RED := \033[0;31m
 NC := \033[0m # No Color
 
-.PHONY: help install-providers build build-custom run clean all deploy-k8s shell tag-and-push
+.PHONY: help setup build build-custom run clean all deploy-k8s shell tag-and-push
 
 help:
 	@echo "Makefile for Ansible Chatbot Stack"
 	@echo "Available targets:"
 	@echo "  help              - Show this help message"
-	@echo "  all               - Run all steps (setup, install-providers, build, build-custom)"
-	@echo "  install-providers - Install external providers"
+	@echo "  all               - Run all steps (setup, build, build-custom)"
+	@echo "  setup 			   - Sets up llama-stack and the external lightspeed providers"
 	@echo "  build             - Build the base Ansible Chatbot Stack image"
 	@echo "  build-custom      - Build the customized Ansible Chatbot Stack image"
 	@echo "  run               - Run the Ansible Chatbot Stack container"
@@ -33,13 +32,12 @@ help:
 	@echo "  tag-and-push      - Tag and push the container image to quay.io"
 	@echo ""
 	@echo "Required Environment variables:"
-	@echo "  ANSIBLE_CHATBOT_STACK_VERSION       	- Version tag for the image (default: $(ANSIBLE_CHATBOT_STACK_VERSION))"
+	@echo "  ANSIBLE_CHATBOT_VERSION       	- Version tag for the image (default: $(ANSIBLE_CHATBOT_VERSION))"
 	@echo "  ANSIBLE_CHATBOT_VLLM_URL      	- URL for the vLLM inference provider"
 	@echo "  ANSIBLE_CHATBOT_VLLM_API_TOKEN 	- API token for the vLLM inference provider"
 	@echo "  ANSIBLE_CHATBOT_INFERENCE_MODEL	- Inference model to use"
 	@echo "  CONTAINER_DB_PATH           		- Path to the container database (default: $(CONTAINER_DB_PATH))"
 	@echo "  LOCAL_DB_PATH               		- Path to the local database (default: $(LOCAL_DB_PATH))"
-	@echo "  LLAMA_STACK_PYPI_VERSION       	- PyPI version of llama-stack (default: $(LLAMA_STACK_PYPI_VERSION))"
 	@echo "  LLAMA_STACK_PORT              	- Port to expose (default: $(LLAMA_STACK_PORT))"
 	@echo "  QUAY_ORG                		- Quay organization name (default: $(QUAY_ORG))"
 
@@ -47,17 +45,11 @@ setup:
 	@echo "Setting up environment..."
 	python3 -m venv venv
 	. venv/bin/activate && pip install -r requirements.txt
+	mkdir -p ~/.llama/providers.d/inline/safety/
+	mkdir -p ~/.llama/providers.d/remote/tool_runtime/
+	curl -o ~/.llama/providers.d/inline/safety/lightspeed_question_validity.yaml https://raw.githubusercontent.com/lightspeed-core/lightspeed-providers/refs/heads/main/resources/external_providers/inline/safety/lightspeed_question_validity.yaml
+	curl -o ~/.llama/providers.d/remote/tool_runtime/lightspeed.yaml https://raw.githubusercontent.com/lightspeed-core/lightspeed-providers/refs/heads/main/resources/external_providers/remote/tool_runtime/lightspeed.yaml
 	@echo "Environment setup complete."
-
-install-providers:
-	@echo "Installing external providers..."
-	mkdir -p ~/.llama/providers.d/inline/safety ~/.llama/providers.d/remote/tool_runtime
-	wget -q https://raw.githubusercontent.com/lightspeed-core/lightspeed-providers/refs/heads/main/resources/external_providers/inline/safety/lightspeed_question_validity.yaml \
-	  -O ~/.llama/providers.d/inline/safety/lightspeed_question_validity.yaml
-	wget -q https://raw.githubusercontent.com/lightspeed-core/lightspeed-providers/refs/heads/main/resources/external_providers/remote/tool_runtime/lightspeed.yaml \
-	  -O ~/.llama/providers.d/remote/tool_runtime/lightspeed.yaml
-	. venv/bin/activate && pip install lightspeed_stack_providers
-	@echo "External providers installed."
 
 build:
 	@echo "Building base Ansible Chatbot Stack image..."
@@ -69,15 +61,19 @@ build:
 
 # Pre-check required environment variables for build-custom
 check-env-build-custom:
-	@if [ -z "$(ANSIBLE_CHATBOT_STACK_VERSION)" ]; then \
-		echo "$(RED)Error: ANSIBLE_CHATBOT_STACK_VERSION is required but not set$(NC)"; \
+	@if [ -z "$(ANSIBLE_CHATBOT_VERSION)" ]; then \
+		echo "$(RED)Error: ANSIBLE_CHATBOT_VERSION is required but not set$(NC)"; \
+		exit 1; \
+	fi
+	@if [ -z "$(LLAMA_STACK_VERSION)" ]; then \
+		echo "$(RED)Error: LLAMA_STACK_VERSION is required but not set$(NC)"; \
 		exit 1; \
 	fi
 
 build-custom: check-env-build-custom build
 	@echo "Building customized Ansible Chatbot Stack image..."
-	docker build -f Containerfile -t ansible-chatbot-stack:$(ANSIBLE_CHATBOT_STACK_VERSION) --build-arg ANSIBLE_CHATBOT_STACK_VERSION=$(ANSIBLE_CHATBOT_STACK_VERSION) .
-	@echo "Custom image $(RED)ansible-chatbot-stack:$(ANSIBLE_CHATBOT_STACK_VERSION)$(NC) built successfully."
+	docker build -f Containerfile -t ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION) --build-arg LLAMA_STACK_VERSION=$(LLAMA_STACK_VERSION) .
+	@echo "Custom image $(RED)ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION)$(NC) built successfully."
 
 # Pre-check for required environment variables
 check-env-run:
@@ -93,8 +89,8 @@ check-env-run:
 		echo "$(RED)Error: ANSIBLE_CHATBOT_INFERENCE_MODEL is required but not set$(NC)"; \
 		exit 1; \
 	fi
-	@if [ -z "$(ANSIBLE_CHATBOT_STACK_VERSION)" ]; then \
-		echo "$(RED)Error: ANSIBLE_CHATBOT_STACK_VERSION is required but not set$(NC)"; \
+	@if [ -z "$(ANSIBLE_CHATBOT_VERSION)" ]; then \
+		echo "$(RED)Error: ANSIBLE_CHATBOT_VERSION is required but not set$(NC)"; \
 		exit 1; \
 	fi
 
@@ -107,7 +103,7 @@ run: check-env-run
 	  --env VLLM_URL=$(ANSIBLE_CHATBOT_VLLM_URL) \
 	  --env VLLM_API_TOKEN=$(ANSIBLE_CHATBOT_VLLM_API_TOKEN) \
 	  --env INFERENCE_MODEL=$(ANSIBLE_CHATBOT_INFERENCE_MODEL) \
-	  ansible-chatbot-stack:$(ANSIBLE_CHATBOT_STACK_VERSION)
+	  ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION)
 
 # Pre-check required environment variables for local DB run
 check-env-run-local-db: check-env-run
@@ -131,7 +127,7 @@ run-local-db: check-env-run-local-db
 	  --env VLLM_URL=$(ANSIBLE_CHATBOT_VLLM_URL) \
 	  --env VLLM_API_TOKEN=$(ANSIBLE_CHATBOT_VLLM_API_TOKEN) \
 	  --env INFERENCE_MODEL=$(ANSIBLE_CHATBOT_INFERENCE_MODEL) \
-	  ansible-chatbot-stack:$(ANSIBLE_CHATBOT_STACK_VERSION)
+	  ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION)
 
 clean:
 	@echo "Cleaning up..."
@@ -159,8 +155,8 @@ check-env-tag-and-push:
 		echo "$(RED)Error: QUAY_ORG is required but not set$(NC)"; \
 		exit 1; \
 	fi
-	@if [ -z "$(ANSIBLE_CHATBOT_STACK_VERSION)" ]; then \
-		echo "$(RED)Error: ANSIBLE_CHATBOT_STACK_VERSION is required but not set$(NC)"; \
+	@if [ -z "$(ANSIBLE_CHATBOT_VERSION)" ]; then \
+		echo "$(RED)Error: ANSIBLE_CHATBOT_VERSION is required but not set$(NC)"; \
 		exit 1; \
 	fi
 
@@ -168,13 +164,13 @@ tag-and-push: check-env-tag-and-push
 	@echo "Logging in to quay.io..."
 	@echo "Please enter your quay.io credentials when prompted"
 	docker login quay.io
-	@echo "Tagging image ansible-chatbot-stack:$(ANSIBLE_CHATBOT_STACK_VERSION)"
-	docker tag ansible-chatbot-stack:$(ANSIBLE_CHATBOT_STACK_VERSION) quay.io/$(QUAY_ORG)/ansible-chatbot-stack:$(ANSIBLE_CHATBOT_STACK_VERSION)
+	@echo "Tagging image ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION)"
+	docker tag ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION) quay.io/$(QUAY_ORG)/ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION)
 	@echo "Pushing image to quay.io..."
-	docker push quay.io/$(QUAY_ORG)/ansible-chatbot-stack:$(ANSIBLE_CHATBOT_STACK_VERSION)
-	@echo "Image successfully pushed to quay.io/$(QUAY_ORG)/ansible-chatbot-stack:$(ANSIBLE_CHATBOT_STACK_VERSION)"
+	docker push quay.io/$(QUAY_ORG)/ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION)
+	@echo "Image successfully pushed to quay.io/$(QUAY_ORG)/ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION)"
 
-all: setup install-providers build build-custom
+all: setup build build-custom
 	@echo "All build steps completed successfully."
 	@echo "To run the container, use: $(RED)make run$(NC)"
 	@echo "To tag and push the container to quay.io, use: $(RED)make tag-and-push$(NC)"

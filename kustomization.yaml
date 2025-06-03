@@ -4,6 +4,6 @@ resources:
 - ansible-chatbot-deploy.yaml
 namespace: ansible-chatbot-stack
 images:
-- name: ansible-chatbot
-  newName: quay.io/ansible/ansible-chatbot
-  newTag: aap-0.2.7
+- name: ansible-chatbot-stack
+  newName: quay.io/ansible/ansible-chatbot-stack
+  newTag: 0.0.1

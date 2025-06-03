@@ -14,8 +14,8 @@ Build/Run overview:
 ```mermaid
 flowchart TB
 %% Nodes
-    CHATBOT_STACK([fa:fa-layer-group ansible-chatbot:x.y.z])
-    AAP_CHATBOT_STACK([fa:fa-layer-group ansible-chatbot:aap-x.y.z])
+    CHATBOT_STACK([fa:fa-layer-group ansible-chatbot-stack-base:x.y.z])
+    AAP_CHATBOT_STACK([fa:fa-layer-group ansible-chatbot-stack:x.y.z])
     AAP_CHATBOT([fa:fa-comment Ansible Chatbot Service])
     CHATBOT_BUILD_CONFIG{{fa:fa-wrench ansible-chatbot-build.yaml}}
     CHATBOT_RUN_CONFIG{{fa:fa-wrench ansible-chatbot-run.yaml}}
@@ -35,72 +35,47 @@ flowchart TB
 
 ## Build
 
-#### 0.- Pre-requisites
+#### 1.- Setup for Ansible Chatbot Stack
 
 --- 
 
 > Actually using temporary https://pypi.org/project/lightspeed-stack-providers/ package, otherwise further need for [lightspeed external providers](https://github.com/lightspeed-core/lightspeed-providers) available on PyPI 
 
-- `docker` or `podman` available
-- Need for manually copying the `aap_faiss_store.db` the root repository directory before building
-- Install llama-stack on the host machine, if not present:
+- Install llama-stack on the host machine, if not present.
+- External providers YAML manifests must be present in `providers.d/` of your host's llama-stack directory.
+- External providers' python libraries must be in the container's python's library path, but also in the host machine's python library path. It is a workaround for [this hack](https://github.com/meta-llama/llama-stack/blob/0cc07311890c00feb5bbd40f5052c8a84a88aa65/llama_stack/cli/stack/_build.py#L299).
 
-      python3 -m venv venv
-      source venv/bin/activate
-      pip install -r requirements.txt
-
-#### 1.- Preparing the Ansible Chatbot Stack build
-
---- 
-
-- External providers YAML manifests must be present in `providers.d/` of your host's llama-stack directory:
-
-        wget https://raw.githubusercontent.com/lightspeed-core/lightspeed-providers/refs/heads/main/resources/external_providers/inline/safety/lightspeed_question_validity.yaml \ 
-          -O ~/.llama/providers.d/inline/safety/lightspeed_question_validity.yaml 
-        wget https://raw.githubusercontent.com/lightspeed-core/lightspeed-providers/refs/heads/main/resources/external_providers/remote/tool_runtime/lightspeed.yaml \
-          -O ~/.llama/providers.d/remote/tool_runtime/lightspeed.yaml
-
-- External providers' python libraries must be in the container's python's library path, but also in the host machine's python library path. It is a workaround for [this hack](https://github.com/meta-llama/llama-stack/blob/0cc07311890c00feb5bbd40f5052c8a84a88aa65/llama_stack/cli/stack/_build.py#L299): 
-
-        pip install lightspeed_stack_providers
+        make setup
 
 #### 2.- Building the Ansible Chatbot Stack 
 
 --- 
 
-> Builds the image `ansible-chatbot:$PYPI_VERSION`. 
+> Builds the image `ansible-chatbot-stack-base:$PYPI_VERSION`. 
 
 > The value for env `PYPI_VERSION` specifies the concrete llama-stack release to use, once building the ansible-chatbot distribution (image). 
 
     export PYPI_VERSION=0.2.9
-    export LLAMA_STACK_LOGGING='server=debug;core=info'
-    export UV_HTTP_TIMEOUT=120
-    llama stack build --config ansible-chatbot-build.yaml --image-type container
+    make build
 
 #### 3.- Customizing the Ansible Chatbot Stack 
 
 --- 
     
-> Builds the image `ansible-chatbot:aap-$PYPI_VERSION`. 
+> Builds the image `ansible-chatbot-stack:$ANSIBLE_CHATBOT_VERSION`. 
 
-    export PYPI_VERSION=0.2.9
-    docker build -f Containerfile -t ansible-chatbot:aap-$PYPI_VERSION --build-arg LLAMA_STACK_VERSION=$PYPI_VERSION .
+    export ANSIBLE_CHATBOT_VERSION=0.0.1
+    make build-custom
  
 ## Run
 
 > Change the `ANSIBLE_CHATBOT_VERSION` version and inference parameters below accordingly. 
 
-    export ANSIBLE_CHATBOT_VERSION=aap-0.2.9
+    export ANSIBLE_CHATBOT_VERSION=0.0.1
     export ANSIBLE_CHATBOT_VLLM_URL=<YOUR_MODEL_SERVING_URL>
     export ANSIBLE_CHATBOT_VLLM_API_TOKEN=<YOUR_MODEL_SERVING_API_TOKEN>
     export ANSIBLE_CHATBOT_INFERENCE_MODEL=<YOUR_INFERENCE_MODEL>
-
-    docker run --security-opt label=disable -it -p 8321:8321 \
-      --env LLAMA_STACK_PORT=8321 \
-      --env VLLM_URL=$ANSIBLE_CHATBOT_VLLM_URL \
-      --env VLLM_API_TOKEN=$ANSIBLE_CHATBOT_VLLM_API_TOKEN \
-      --env INFERENCE_MODEL=$ANSIBLE_CHATBOT_INFERENCE_MODEL \
-      ansible-chatbot:$ANSIBLE_CHATBOT_VERSION
+    make run
 
 ## Deploy into a k8s cluster
 
@@ -118,11 +93,7 @@ flowchart TB
 
 If you have the need for re-building images, apply the following clean-ups right before:
 
-    # Clean-up generated providers.d/
-    rm -rf providers.d/
-
-    # Clean-up generated docker images
-    docker rmi -f $(docker images -a -q --filter reference=ansible-chatbot)
+    make clean
 
 ## Appendix - Testing by using the CLI client
 
@@ -170,5 +141,5 @@ If you have the need for re-building images, apply the following clean-ups right
 ## Appendix - Obtain a container shell
 
     # Obtain a container shell for the Ansible Chatbot Stack.
-    docker run --security-opt label=disable -it --entrypoint /bin/bash ansible-chatbot:aap-<version>
+    make shell
 

@@ -1,0 +1,70 @@
+name: Build and Push
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "The Ansible Chatbot Stack version to build and push"
+        required: true
+        default: "0.0.1"
+
+jobs:
+
+  build_push:
+    runs-on: ubuntu-latest
+    services:
+      registry:
+        image: registry:2
+        ports:
+          - 5000:5000
+    env:
+      ANSIBLE_CHATBOT_VERSION: ${{ github.event.inputs.version }}
+
+    steps:
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: network=host
+
+      - name: Login to Quay
+        uses: docker/login-action@v3
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_USER }}
+          password: ${{ secrets.QUAY_TOKEN }}
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: refs/heads/main
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
+
+      - name: Environment Setup
+        run: |
+          make setup
+
+      - name: Base Ansible Chatbot Stack Build
+        run: |
+          export LLAMA_STACK_VERSION=$(cat requirements.txt  | grep llama-stack== | cut -c 14-)
+          export PYPI_VERSION=$LLAMA_STACK_VERSION
+          echo "LLAMA_STACK_VERSION=$LLAMA_STACK_VERSION" >> "$GITHUB_ENV"
+          make build
+          docker tag docker.io/library/ansible-chatbot-stack-base:$LLAMA_STACK_VERSION localhost:5000/ansible-chatbot-stack-base:$LLAMA_STACK_VERSION
+          docker push localhost:5000/ansible-chatbot-stack-base:$LLAMA_STACK_VERSION
+
+      - name: Ansible Chatbot Stack Build and Push
+        uses: docker/build-push-action@v6
+        with:
+          file: Containerfile
+          push: true
+          tags: quay.io/ansible/ansible-chatbot-stack:${{ env.ANSIBLE_CHATBOT_VERSION }}
+          build-args: |
+            ANSIBLE_CHATBOT_BASE_IMAGE=localhost:5000/ansible-chatbot-stack-base
+            LLAMA_STACK_VERSION=${{ env.LLAMA_STACK_VERSION }}
