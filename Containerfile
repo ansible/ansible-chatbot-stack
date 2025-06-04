@@ -10,6 +10,5 @@ ADD ansible-chatbot-run.yaml /.llama/distributions/ansible-chatbot
 RUN mkdir -p /.llama/temp
 ADD bootstrap.sh /.llama/temp
 RUN chmod +x /.llama/temp/bootstrap.sh
-ADD aap_faiss_store.db /.llama/temp
 
 ENTRYPOINT ["/bin/sh", "/.llama/temp/bootstrap.sh"]

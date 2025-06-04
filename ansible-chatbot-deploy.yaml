@@ -55,6 +55,10 @@ spec:
         volumeMounts:
           - name: ansible-chatbot-storage
             mountPath: /.llama/data
+      initContainers:
+      - name: init-rag-vector-db
+        image: quay.io/ansible/aap-rag-content:latest
+        command: ["/bin/bash", "-c", "gzip -cd /rag/llama_stack_vector_db/faiss_store.db.gz > /.llama/data/distributions/ansible-chatbot/faiss_store.db"]
       volumes:
       - name: ansible-chatbot-storage
         persistentVolumeClaim:
