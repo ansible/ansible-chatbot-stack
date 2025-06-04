@@ -13,4 +13,5 @@ ADD aap_faiss_store.db /.llama/data/distributions/ansible-chatbot
 RUN mkdir -p /.llama/temp
 ADD bootstrap.sh /.llama/temp
 RUN chmod +x /.llama/temp/bootstrap.sh
-ADD aap_faiss_store.db /.llama/temp
+ADD init-rag-vector-db.sh
+RUN chmod +x /.llama/temp/init-rag-vector-db.sh
