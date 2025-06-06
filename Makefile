@@ -9,12 +9,18 @@ ANSIBLE_CHATBOT_INFERENCE_MODEL ?=
 LLAMA_STACK_PORT ?= 8321
 LOCAL_DB_PATH ?= .
 CONTAINER_DB_PATH ?= /.llama/data/distributions/ansible-chatbot
-
 # Colors for terminal output
 RED := \033[0;31m
 NC := \033[0m # No Color
 
 .PHONY: help setup build build-custom run clean all deploy-k8s shell tag-and-push
+
+.EXPORT_ALL_VARIABLES:
+
+PYPI_VERSION=$(shell cat requirements.txt  | grep llama-stack== | cut -c 14-)
+LLAMA_STACK_VERSION=$(PYPI_VERSION)
+LLAMA_STACK_LOGGING="server=debug;core=info"
+UV_HTTP_TIMEOUT=120
 
 help:
 	@echo "Makefile for Ansible Chatbot Stack"
@@ -53,8 +59,6 @@ setup:
 
 build:
 	@echo "Building base Ansible Chatbot Stack image..."
-	export LLAMA_STACK_LOGGING=server=debug;core=info && \
-	export UV_HTTP_TIMEOUT=120 && \
 	. venv/bin/activate && \
 	llama stack build --config ansible-chatbot-build.yaml --image-type container
 	@echo "Base image $(RED)ansible-chatbot-stack-base$(NC) built successfully."
@@ -63,10 +67,6 @@ build:
 check-env-build-custom:
 	@if [ -z "$(ANSIBLE_CHATBOT_VERSION)" ]; then \
 		echo "$(RED)Error: ANSIBLE_CHATBOT_VERSION is required but not set$(NC)"; \
-		exit 1; \
-	fi
-	@if [ -z "$(LLAMA_STACK_VERSION)" ]; then \
-		echo "$(RED)Error: LLAMA_STACK_VERSION is required but not set$(NC)"; \
 		exit 1; \
 	fi
 

@@ -53,9 +53,6 @@ flowchart TB
 
 > Builds the image `ansible-chatbot-stack-base:$PYPI_VERSION`. 
 
-> The value for env `PYPI_VERSION` specifies the concrete llama-stack release to use, once building the ansible-chatbot distribution (image). 
-
-    export PYPI_VERSION=0.2.9
     make build
 
 #### 3.- Customizing the Ansible Chatbot Stack 
