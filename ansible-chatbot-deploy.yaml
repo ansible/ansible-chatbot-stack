@@ -49,7 +49,7 @@ spec:
           - name: LLAMA_STACK_CONFIG_DIR
             value: /.llama/data/
           - name: EMBEDDING_MODEL
-            value: /.llama/data/embeddings_model
+            value: ./embeddings_model
         envFrom:
           - configMapRef:
               name: "ansible-chatbot-server-env-properties"
@@ -58,6 +58,13 @@ spec:
         volumeMounts:
           - name: ansible-chatbot-storage
             mountPath: /.llama/data
+        command:
+          - /bin/bash
+          - -c
+          - |
+            ln -s /.llama/data/embeddings_model ./embeddings_model
+            python -m llama_stack.distribution.server.server --config /.llama/distributions/ansible-chatbot/ansible-chatbot-run.yaml
+
       initContainers:
       - name: init-rag-vector-db
         image: quay.io/ansible/aap-rag-content:latest
