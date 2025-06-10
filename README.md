@@ -85,19 +85,19 @@ flowchart TB
 
 ## Deploy into a k8s cluster
 
-0.- Change configuration in `kustomization.yaml` accordingly, then:
+### Change configuration in `kustomization.yaml` accordingly, then
 
 ```shell
     kubectl kustomize . > my-chatbot-stack-deploy.yaml
 ```
 
-1.- Deploy the service:
+### Deploy the service
 
 ```shell
     kubectl apply -f my-chatbot-stack-deploy.yaml
 ```
 
-2.- [Verify the deployment](https://llama-stack.readthedocs.io/en/latest/distributions/kubernetes_deployment.html#verifying-the-deployment)
+### [Verify the deployment](https://llama-stack.readthedocs.io/en/latest/distributions/kubernetes_deployment.html#verifying-the-deployment)
 
 ## Appendix - Host clean-up
 
