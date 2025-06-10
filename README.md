@@ -3,13 +3,14 @@
 An Ansible Chatbot (llama) Stack [custom distribution](https://llama-stack.readthedocs.io/en/latest/distributions/building_distro.html) (`Container` type).
 
 It includes:
+
 - A remote vLLM inference provider (RHOSAI vLLM compatible)
 - The inline sentence transformers (Meta)
 - AAP RAG database files and configuration
 - [Lightspeed external providers](https://github.com/lightspeed-core/lightspeed-providers)
 - Other default providers from the [Remote vLLM distribution](https://llama-stack.readthedocs.io/en/latest/distributions/self_hosted_distro/remote-vllm.html) as well
 
-Build/Run overview: 
+Build/Run overview:
 
 ```mermaid
 flowchart TB
@@ -35,54 +36,66 @@ flowchart TB
 
 ## Build
 
-#### 1.- Setup for Ansible Chatbot Stack
+### 1.- Setup for Ansible Chatbot Stack
 
---- 
+---
 
-> Actually using temporary https://pypi.org/project/lightspeed-stack-providers/ package, otherwise further need for [lightspeed external providers](https://github.com/lightspeed-core/lightspeed-providers) available on PyPI 
+> Actually using temporary [lightspeed stack providers](https://pypi.org/project/lightspeed-stack-providers/) package, otherwise further need for [lightspeed external providers](https://github.com/lightspeed-core/lightspeed-providers) available on PyPI
 
 - Install llama-stack on the host machine, if not present.
 - External providers YAML manifests must be present in `providers.d/` of your host's llama-stack directory.
 - External providers' python libraries must be in the container's python's library path, but also in the host machine's python library path. It is a workaround for [this hack](https://github.com/meta-llama/llama-stack/blob/0cc07311890c00feb5bbd40f5052c8a84a88aa65/llama_stack/cli/stack/_build.py#L299).
 
+```shell
         make setup
+```
 
-#### 2.- Building the Ansible Chatbot Stack 
+### 2.- Building the Ansible Chatbot Stack
 
---- 
+---
 
-> Builds the image `ansible-chatbot-stack-base:$PYPI_VERSION`. 
+> Builds the image `ansible-chatbot-stack-base:$PYPI_VERSION`.
 
+```shell
     make build
+```
 
-#### 3.- Customizing the Ansible Chatbot Stack 
+### 3.- Customizing the Ansible Chatbot Stack
 
---- 
-    
-> Builds the image `ansible-chatbot-stack:$ANSIBLE_CHATBOT_VERSION`. 
+---
 
+> Builds the image `ansible-chatbot-stack:$ANSIBLE_CHATBOT_VERSION`.
+
+```shell
     export ANSIBLE_CHATBOT_VERSION=0.0.1
     make build-custom
- 
+ ```
+
 ## Run
 
-> Change the `ANSIBLE_CHATBOT_VERSION` version and inference parameters below accordingly. 
+> Change the `ANSIBLE_CHATBOT_VERSION` version and inference parameters below accordingly.
 
+```shell
     export ANSIBLE_CHATBOT_VERSION=0.0.1
     export ANSIBLE_CHATBOT_VLLM_URL=<YOUR_MODEL_SERVING_URL>
     export ANSIBLE_CHATBOT_VLLM_API_TOKEN=<YOUR_MODEL_SERVING_API_TOKEN>
     export ANSIBLE_CHATBOT_INFERENCE_MODEL=<YOUR_INFERENCE_MODEL>
     make run
+```
 
 ## Deploy into a k8s cluster
 
 0.- Change configuration in `kustomization.yaml` accordingly, then:
 
+```shell
     kubectl kustomize . > my-chatbot-stack-deploy.yaml
+```
 
 1.- Deploy the service:
 
+```shell
     kubectl apply -f my-chatbot-stack-deploy.yaml
+```
 
 2.- [Verify the deployment](https://llama-stack.readthedocs.io/en/latest/distributions/kubernetes_deployment.html#verifying-the-deployment)
 
@@ -90,10 +103,13 @@ flowchart TB
 
 If you have the need for re-building images, apply the following clean-ups right before:
 
+```shell
     make clean
+```
 
 ## Appendix - Testing by using the CLI client
 
+```shell
     > llama-stack-client --configure ...
 
     > llama-stack-client models list
@@ -134,9 +150,11 @@ If you have the need for re-building images, apply the following clean-ups right
 
     > llama-stack-client inference chat-completion --message "tell me about Ansible Lightspeed"
     ...
+```
 
 ## Appendix - Obtain a container shell
 
+```shell
     # Obtain a container shell for the Ansible Chatbot Stack.
     make shell
-
+```
