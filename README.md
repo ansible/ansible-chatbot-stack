@@ -36,7 +36,7 @@ flowchart TB
 
 ## Build
 
-### 1.- Setup for Ansible Chatbot Stack
+### Setup for Ansible Chatbot Stack
 
 ---
 
@@ -50,7 +50,7 @@ flowchart TB
         make setup
 ```
 
-### 2.- Building the Ansible Chatbot Stack
+### Building the Ansible Chatbot Stack
 
 ---
 
@@ -60,7 +60,7 @@ flowchart TB
     make build
 ```
 
-### 3.- Customizing the Ansible Chatbot Stack
+### Customizing the Ansible Chatbot Stack
 
 ---
 
