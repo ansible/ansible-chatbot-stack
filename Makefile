@@ -18,6 +18,7 @@ NC := \033[0m # No Color
 .EXPORT_ALL_VARIABLES:
 
 PYPI_VERSION=$(shell cat requirements.txt  | grep llama-stack== | cut -c 14-)
+TEST_PYPI_VERSION=$(PYPI_VERSION)
 LLAMA_STACK_VERSION=$(PYPI_VERSION)
 LLAMA_STACK_LOGGING="server=debug;core=info"
 UV_HTTP_TIMEOUT=120
@@ -49,12 +50,16 @@ help:
 
 setup:
 	@echo "Setting up environment..."
-	python3 -m venv venv
-	. venv/bin/activate && pip install -r requirements.txt
+	uv pip install -r requirements.txt
 	mkdir -p ~/.llama/providers.d/inline/safety/
 	mkdir -p ~/.llama/providers.d/remote/tool_runtime/
 	curl -o ~/.llama/providers.d/inline/safety/lightspeed_question_validity.yaml https://raw.githubusercontent.com/lightspeed-core/lightspeed-providers/refs/heads/main/resources/external_providers/inline/safety/lightspeed_question_validity.yaml
 	curl -o ~/.llama/providers.d/remote/tool_runtime/lightspeed.yaml https://raw.githubusercontent.com/lightspeed-core/lightspeed-providers/refs/heads/main/resources/external_providers/remote/tool_runtime/lightspeed.yaml
+	llama stack build --config ansible-chatbot-build.yaml --image-type venv --image-name .venv
+	cp ansible-chatbot-run.yaml ~/.llama/distributions/.venv/.venv-run.yaml
+	sed -i 's/\/\.llama/~\/\.llama/' ~/.llama/distributions/.venv/.venv-run.yaml
+	sed -i 's/\/ansible-chatbot/\/\.venv/' ~/.llama/distributions/.venv/.venv-run.yaml
+	./scripts/download_embeddings_and_vector_db.sh
 	@echo "Environment setup complete."
 
 build:
@@ -128,6 +133,14 @@ run-local-db: check-env-run-local-db
 	  --env VLLM_API_TOKEN=$(ANSIBLE_CHATBOT_VLLM_API_TOKEN) \
 	  --env INFERENCE_MODEL=$(ANSIBLE_CHATBOT_INFERENCE_MODEL) \
 	  ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION)
+
+run-venv: check-env-run
+	LLAMA_STACK_PORT=$(LLAMA_STACK_PORT) \
+	VLLM_URL=$(ANSIBLE_CHATBOT_VLLM_URL) \
+	VLLM_API_TOKEN=$(ANSIBLE_CHATBOT_VLLM_API_TOKEN) \
+	INFERENCE_MODEL=$(ANSIBLE_CHATBOT_INFERENCE_MODEL) \
+	EMBEDDING_MODEL=./embeddings_model \
+	llama stack run ~/.llama/distributions/.venv/.venv-run.yaml
 
 clean:
 	@echo "Cleaning up..."

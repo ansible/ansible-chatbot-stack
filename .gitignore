@@ -178,3 +178,6 @@ agents_store.db
 localfs_datasetio.db
 responses_store.db
 trace_store.db
+
+# embeddings_model
+embeddings_model/

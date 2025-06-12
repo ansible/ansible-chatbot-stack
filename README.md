@@ -35,6 +35,17 @@ flowchart TB
 
 ## Build
 
+#### 0.- Install uv and activate venv
+- Install `uv`. See https://docs.astral.sh/uv/getting-started/installation/ for instructions.
+- Create venv with 
+  ```
+  uv venv
+  ```
+- Activate the created venv
+  ```
+  source .venv/bin/activate
+  ```
+
 #### 1.- Setup for Ansible Chatbot Stack
 
 --- 
@@ -64,7 +75,7 @@ flowchart TB
     export ANSIBLE_CHATBOT_VERSION=0.0.1
     make build-custom
  
-## Run
+## Run from a container
 
 > Change the `ANSIBLE_CHATBOT_VERSION` version and inference parameters below accordingly. 
 
@@ -85,6 +96,11 @@ flowchart TB
     kubectl apply -f my-chatbot-stack-deploy.yaml
 
 2.- [Verify the deployment](https://llama-stack.readthedocs.io/en/latest/distributions/kubernetes_deployment.html#verifying-the-deployment)
+
+## Run from venv
+```commandline
+make run-venv
+```
 
 ## Appendix - Host clean-up
 
