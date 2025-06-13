@@ -6,9 +6,11 @@ ANSIBLE_CHATBOT_VERSION ?=
 ANSIBLE_CHATBOT_VLLM_URL ?=
 ANSIBLE_CHATBOT_VLLM_API_TOKEN ?=
 ANSIBLE_CHATBOT_INFERENCE_MODEL ?=
+AAP_GATEWAY_TOKEN ?=
 LLAMA_STACK_PORT ?= 8321
 LOCAL_DB_PATH ?= .
 CONTAINER_DB_PATH ?= /.llama/data/distributions/ansible-chatbot
+RAG_CONTENT_IMAGE ?= quay.io/ansible/aap-rag-content:latest
 # Colors for terminal output
 RED := \033[0;31m
 NC := \033[0m # No Color
@@ -47,7 +49,7 @@ help:
 	@echo "  LLAMA_STACK_PORT              	- Port to expose (default: $(LLAMA_STACK_PORT))"
 	@echo "  QUAY_ORG                		- Quay organization name (default: $(QUAY_ORG))"
 
-setup:
+setup: setup-vector-db-and-embedding-image
 	@echo "Setting up environment..."
 	python3 -m venv venv
 	. venv/bin/activate && pip install -r requirements.txt
@@ -57,40 +59,54 @@ setup:
 	curl -o ~/.llama/providers.d/remote/tool_runtime/lightspeed.yaml https://raw.githubusercontent.com/lightspeed-core/lightspeed-providers/refs/heads/main/resources/external_providers/remote/tool_runtime/lightspeed.yaml
 	@echo "Environment setup complete."
 
+setup-vector-db-and-embedding-image:
+	@echo "Setting up vector db and embedding image..."
+	rm -rf ./vector_db ./embeddings_model
+	mkdir -p ./vector_db
+	docker run -d --rm --name rag-content $(RAG_CONTENT_IMAGE) sleep infinity
+	docker cp rag-content:/rag/llama_stack_vector_db/faiss_store.db.gz ./vector_db/aap_faiss_store.db.gz
+	docker cp rag-content:/rag/embeddings_model .
+	docker kill rag-content
+	gzip -d ./vector_db/aap_faiss_store.db.gz
+
 build:
 	@echo "Building base Ansible Chatbot Stack image..."
 	. venv/bin/activate && \
 	llama stack build --config ansible-chatbot-build.yaml --image-type container
-	@echo "Base image $(RED)ansible-chatbot-stack-base$(NC) built successfully."
+	@printf "Base image $(RED)ansible-chatbot-stack-base$(NC) built successfully.\n"
 
 # Pre-check required environment variables for build-custom
 check-env-build-custom:
 	@if [ -z "$(ANSIBLE_CHATBOT_VERSION)" ]; then \
-		echo "$(RED)Error: ANSIBLE_CHATBOT_VERSION is required but not set$(NC)"; \
+		printf "$(RED)Error: ANSIBLE_CHATBOT_VERSION is required but not set$(NC)\n"; \
 		exit 1; \
 	fi
 
 build-custom: check-env-build-custom build
 	@echo "Building customized Ansible Chatbot Stack image..."
 	docker build -f Containerfile -t ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION) --build-arg LLAMA_STACK_VERSION=$(LLAMA_STACK_VERSION) .
-	@echo "Custom image $(RED)ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION)$(NC) built successfully."
+	@printf "Custom image $(RED)ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION)$(NC) built successfully.\n"
 
 # Pre-check for required environment variables
 check-env-run:
 	@if [ -z "$(ANSIBLE_CHATBOT_VLLM_URL)" ]; then \
-		echo "$(RED)Error: ANSIBLE_CHATBOT_VLLM_URL is required but not set$(NC)"; \
+		printf "$(RED)Error: ANSIBLE_CHATBOT_VLLM_URL is required but not set$(NC)\n"; \
 		exit 1; \
 	fi
 	@if [ -z "$(ANSIBLE_CHATBOT_VLLM_API_TOKEN)" ]; then \
-		echo "$(RED)Error: ANSIBLE_CHATBOT_VLLM_API_TOKEN is required but not set$(NC)"; \
+		printf "$(RED)Error: ANSIBLE_CHATBOT_VLLM_API_TOKEN is required but not set$(NC)\n"; \
 		exit 1; \
 	fi
 	@if [ -z "$(ANSIBLE_CHATBOT_INFERENCE_MODEL)" ]; then \
-		echo "$(RED)Error: ANSIBLE_CHATBOT_INFERENCE_MODEL is required but not set$(NC)"; \
+		printf "$(RED)Error: ANSIBLE_CHATBOT_INFERENCE_MODEL is required but not set$(NC)\n"; \
 		exit 1; \
 	fi
 	@if [ -z "$(ANSIBLE_CHATBOT_VERSION)" ]; then \
-		echo "$(RED)Error: ANSIBLE_CHATBOT_VERSION is required but not set$(NC)"; \
+		printf "$(RED)Error: ANSIBLE_CHATBOT_VERSION is required but not set$(NC)\n"; \
+		exit 1; \
+	fi
+	@if [ -z "$(AAP_GATEWAY_TOKEN)" ]; then \
+		printf "$(RED)Error: AAP_GATEWAY_TOKEN is required but not set$(NC)\n"; \
 		exit 1; \
 	fi
 
@@ -99,20 +115,23 @@ run: check-env-run
 	@echo "Using vLLM URL: $(ANSIBLE_CHATBOT_VLLM_URL)"
 	@echo "Using inference model: $(ANSIBLE_CHATBOT_INFERENCE_MODEL)"
 	docker run --security-opt label=disable -it -p $(LLAMA_STACK_PORT):$(LLAMA_STACK_PORT) \
+	  -v ./embeddings_model:/app/embeddings_model \
+	  -v ./vector_db/aap_faiss_store.db:$(CONTAINER_DB_PATH)/aap_faiss_store.db \
 	  --env LLAMA_STACK_PORT=$(LLAMA_STACK_PORT) \
 	  --env VLLM_URL=$(ANSIBLE_CHATBOT_VLLM_URL) \
 	  --env VLLM_API_TOKEN=$(ANSIBLE_CHATBOT_VLLM_API_TOKEN) \
 	  --env INFERENCE_MODEL=$(ANSIBLE_CHATBOT_INFERENCE_MODEL) \
+	  --env AAP_GATEWAY_TOKEN=$(AAP_GATEWAY_TOKEN) \
 	  ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION)
 
 # Pre-check required environment variables for local DB run
 check-env-run-local-db: check-env-run
 	@if [ -z "$(LOCAL_DB_PATH)" ]; then \
-		echo "$(RED)Error: LOCAL_DB_PATH is required but not set$(NC)"; \
+		printf "$(RED)Error: LOCAL_DB_PATH is required but not set$(NC)\n"; \
 		exit 1; \
 	fi
 	@if [ -z "$(CONTAINER_DB_PATH)" ]; then \
-		echo "$(RED)Error: CONTAINER_DB_PATH is required but not set$(NC)"; \
+		printf "$(RED)Error: CONTAINER_DB_PATH is required but not set$(NC)\n"; \
 		exit 1; \
 	fi
 
@@ -123,10 +142,13 @@ run-local-db: check-env-run-local-db
 	@echo "Mapping local DB from $(LOCAL_DB_PATH) to $(CONTAINER_DB_PATH)"
 	docker run --security-opt label=disable -it -p $(LLAMA_STACK_PORT):$(LLAMA_STACK_PORT) \
 	  -v $(LOCAL_DB_PATH):$(CONTAINER_DB_PATH) \
+	  -v ./embeddings_model:/app/embeddings_model \
+	  -v ./vector_db/aap_faiss_store.db:$(CONTAINER_DB_PATH)/aap_faiss_store.db \
 	  --env LLAMA_STACK_PORT=$(LLAMA_STACK_PORT) \
 	  --env VLLM_URL=$(ANSIBLE_CHATBOT_VLLM_URL) \
 	  --env VLLM_API_TOKEN=$(ANSIBLE_CHATBOT_VLLM_API_TOKEN) \
 	  --env INFERENCE_MODEL=$(ANSIBLE_CHATBOT_INFERENCE_MODEL) \
+	  --env AAP_GATEWAY_TOKEN=$(AAP_GATEWAY_TOKEN) \
 	  ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION)
 
 clean:
@@ -152,11 +174,11 @@ shell:
 # Pre-check required environment variables for tag-and-push
 check-env-tag-and-push:
 	@if [ -z "$(QUAY_ORG)" ]; then \
-		echo "$(RED)Error: QUAY_ORG is required but not set$(NC)"; \
+		printf "$(RED)Error: QUAY_ORG is required but not set$(NC)\n"; \
 		exit 1; \
 	fi
 	@if [ -z "$(ANSIBLE_CHATBOT_VERSION)" ]; then \
-		echo "$(RED)Error: ANSIBLE_CHATBOT_VERSION is required but not set$(NC)"; \
+		printf "$(RED)Error: ANSIBLE_CHATBOT_VERSION is required but not set$(NC)\n"; \
 		exit 1; \
 	fi
 
@@ -172,5 +194,5 @@ tag-and-push: check-env-tag-and-push
 
 all: setup build build-custom
 	@echo "All build steps completed successfully."
-	@echo "To run the container, use: $(RED)make run$(NC)"
-	@echo "To tag and push the container to quay.io, use: $(RED)make tag-and-push$(NC)"
+	@printf "To run the container, use: $(RED)make run$(NC)\n"
+	@printf "To tag and push the container to quay.io, use: $(RED)make tag-and-push$(NC)\n"

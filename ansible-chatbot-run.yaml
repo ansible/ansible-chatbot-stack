@@ -81,14 +81,14 @@ models:
   provider_model_id: null
 - metadata:
     embedding_dimension: 768
-  model_id: ${env.EMBEDDING_MODEL:all-mpnet-base-v2}
+  model_id: ${env.EMBEDDING_MODEL:./embeddings_model}
   provider_id: inline_sentence-transformer
   model_type: embedding
 shields: []
 vector_dbs:
 - metadata: {}
   vector_db_id: "aap-product-docs-2_5"
-  embedding_model: ${env.EMBEDDING_MODEL:all-mpnet-base-v2}
+  embedding_model: ${env.EMBEDDING_MODEL:./embeddings_model}
   embedding_dimension: 768
   provider_id: "aap_faiss"
 datasets: []
