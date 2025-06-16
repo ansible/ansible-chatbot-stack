@@ -17,6 +17,7 @@ metadata:
 immutable: false
 data:
   INFERENCE_MODEL: "granite-3.3-8b-instruct"
+  INFERENCE_MODEL_FILTER: "granite-3.3-8b-instruct"
   # TODO: Use Secrets instead.
   VLLM_API_TOKEN: ""
   # TODO: Use Secrets instead.
