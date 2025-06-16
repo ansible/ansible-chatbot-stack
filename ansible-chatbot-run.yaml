@@ -35,8 +35,8 @@ providers:
     config:
       excluded_categories: []
   agents:
-  - provider_id: meta-reference
-    provider_type: inline::meta-reference
+  - provider_id: lightspeed_inline_agent
+    provider_type: inline::lightspeed_inline_agent
     config:
       persistence_store:
         type: sqlite
@@ -46,6 +46,9 @@ providers:
         type: sqlite
         namespace: null
         db_path: ${env.SQLITE_STORE_DIR:/.llama/data/distributions/ansible-chatbot}/responses_store.db
+      tools_filter:
+        enabled: true
+        model_id: ${env.INFERENCE_MODEL_FILTER:}
       toolgroups:
         - "mcp::aap-gateway"
         - "mcp::aap-controller"

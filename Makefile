@@ -55,8 +55,10 @@ setup: setup-vector-db
 	@echo "Setting up environment..."
 	python3 -m venv venv
 	. venv/bin/activate && pip install -r requirements.txt
+	mkdir -p ~/.llama/providers.d/inline/agents/
 	mkdir -p ~/.llama/providers.d/inline/safety/
 	mkdir -p ~/.llama/providers.d/remote/tool_runtime/
+	curl -o ~/.llama/providers.d/inline/agents/lightspeed_inline_agent.yaml https://raw.githubusercontent.com/lightspeed-core/lightspeed-providers/refs/heads/main/resources/external_providers/inline/agents/lightspeed_inline_agent.yaml
 	curl -o ~/.llama/providers.d/inline/safety/lightspeed_question_validity.yaml https://raw.githubusercontent.com/lightspeed-core/lightspeed-providers/refs/heads/main/resources/external_providers/inline/safety/lightspeed_question_validity.yaml
 	curl -o ~/.llama/providers.d/remote/tool_runtime/lightspeed.yaml https://raw.githubusercontent.com/lightspeed-core/lightspeed-providers/refs/heads/main/resources/external_providers/remote/tool_runtime/lightspeed.yaml
 	@echo "Environment setup complete."

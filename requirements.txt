@@ -1,4 +1,4 @@
 llama-stack==0.2.9
 llama-stack-client==0.2.9
 fire==0.7.0
-lightspeed_stack_providers==0.1.3
+lightspeed_stack_providers==0.1.4
