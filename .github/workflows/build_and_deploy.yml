@@ -64,7 +64,7 @@ jobs:
         with:
           file: Containerfile
           push: true
-          tags: quay.io/ansible/ansible-chatbot-stack:${{ env.ANSIBLE_CHATBOT_VERSION }}
+          tags: quay.io/ansible/ansible-chatbot-stack:latest,quay.io/ansible/ansible-chatbot-stack:${{ env.ANSIBLE_CHATBOT_VERSION }}
           build-args: |
             ANSIBLE_CHATBOT_BASE_IMAGE=localhost:5000/ansible-chatbot-stack-base
             LLAMA_STACK_VERSION=${{ env.LLAMA_STACK_VERSION }}
