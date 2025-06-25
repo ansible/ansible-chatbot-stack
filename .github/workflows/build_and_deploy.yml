@@ -68,3 +68,11 @@ jobs:
           build-args: |
             ANSIBLE_CHATBOT_BASE_IMAGE=localhost:5000/ansible-chatbot-stack-base
             LLAMA_STACK_VERSION=${{ env.LLAMA_STACK_VERSION }}
+
+      - name: Create GitHub Repository Tag
+        id: create_gh_repo_tag
+        run: |
+          git config user.name 'GitHub'
+          git config user.email 'noreply@github.com'
+          git tag -a ${{ env.ANSIBLE_CHATBOT_VERSION }} -m "Release tag ${{ env.ANSIBLE_CHATBOT_VERSION }}"
+          git push origin ${{ env.ANSIBLE_CHATBOT_VERSION }}
