@@ -42,6 +42,9 @@ flowchart TB
 
 > Actually using temporary [lightspeed stack providers](https://pypi.org/project/lightspeed-stack-providers/) package, otherwise further need for [lightspeed external providers](https://github.com/lightspeed-core/lightspeed-providers) available on PyPI
 
+> If you want to run Ansible Chatbot Stack using the venv in the cloned repository, refer to 
+> [Appendix - Setup for running ansible-chatbot-stack from venv](#appendix---setup-for-running-ansible-chatbot-stack-from-venv)
+
 - Install llama-stack on the host machine, if not present.
 - External providers YAML manifests must be present in `providers.d/` of your host's llama-stack directory.
 - External providers' python libraries must be in the container's python's library path, but also in the host machine's python library path. It is a workaround for [this hack](https://github.com/meta-llama/llama-stack/blob/0cc07311890c00feb5bbd40f5052c8a84a88aa65/llama_stack/cli/stack/_build.py#L299).
@@ -161,3 +164,44 @@ If you have the need for re-building images, apply the following clean-ups right
     # Obtain a container shell for the Ansible Chatbot Stack.
     make shell
 ```
+
+## Appendix - Setup for running ansible-chatbot-stack from venv
+
+If you want to run `ansible-chatbot-stack` from venv, use the following steps:
+
+### 0. Install uv and activate venv
+- Install `uv`. See https://docs.astral.sh/uv/getting-started/installation/ for instructions.
+- Create `.python-version` file in the project root directory.
+  ```commandline
+  echo 3.11 > .python-version
+  ```
+- Create venv with `uv` command
+  ```commandline
+  uv venv
+  ```
+- Activate the created venv. Note that the environment is created in `.venv`
+  ```commandline
+  source .venv/bin/activate
+  ```
+  
+### 1. Install dependencies and build a venv-type llama stack image
+```commandline
+make  setup
+```
+
+### 2. Run ansible-chatbot-stack from venv
+```commandline
+make run-venv
+```
+### 3. (Optional) Setup PyCharm Run/Debug Configuration
+For setting up a PyChart Run/Debug configuration, use following values:
+
+- **Run**
+  - Python interpreter: the venv in the project.
+  - script/module: `module` - `llama_stack.distribution.server.server`
+  - Arguments: `-config (your_home_directory)/.llama/distributions/.venv/.venv-run.html`
+- **Environment Variables**
+  - `INFERENCE_MODEL` - Model name to be used like `granite-3.3-8b-instruct`.
+  - `VLLM_URL` - URL of the vLLM server.
+  - `VLLM_API_TOKEN` - API token for the vLLM server.
+  - `AAP_GATEWAY_TOKEN` - If you do not use MCP servers, you can set it to `dummy`.

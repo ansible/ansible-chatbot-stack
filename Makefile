@@ -21,6 +21,7 @@ NC := \033[0m # No Color
 .EXPORT_ALL_VARIABLES:
 
 PYPI_VERSION=$(shell cat requirements.txt  | grep llama-stack== | cut -c 14-)
+TEST_PYPI_VERSION=$(PYPI_VERSION)
 LLAMA_STACK_VERSION=$(PYPI_VERSION)
 LLAMA_STACK_LOGGING="server=debug;core=info"
 UV_HTTP_TIMEOUT=120
@@ -40,6 +41,7 @@ help:
 	@echo "  deploy-k8s        - Deploy to Kubernetes cluster"
 	@echo "  shell             - Get a shell in the container"
 	@echo "  tag-and-push      - Tag and push the container image to quay.io"
+	@echo "  run-venv          - Run the Ansible Chatbot Stack container from venv"
 	@echo ""
 	@echo "Required Environment variables:"
 	@echo "  ANSIBLE_CHATBOT_VERSION       	- Version tag for the image (default: $(ANSIBLE_CHATBOT_VERSION))"
@@ -55,12 +57,20 @@ help:
 
 setup: setup-vector-db
 	@echo "Setting up environment..."
-	python3 -m venv venv
-	. venv/bin/activate && pip install -r requirements.txt
 	mkdir -p ~/.llama/providers.d/inline/agents/
 	mkdir -p ~/.llama/providers.d/remote/tool_runtime/
 	curl -o ~/.llama/providers.d/inline/agents/lightspeed_inline_agent.yaml https://raw.githubusercontent.com/lightspeed-core/lightspeed-providers/refs/heads/main/resources/external_providers/inline/agents/lightspeed_inline_agent.yaml
 	curl -o ~/.llama/providers.d/remote/tool_runtime/lightspeed.yaml https://raw.githubusercontent.com/lightspeed-core/lightspeed-providers/refs/heads/main/resources/external_providers/remote/tool_runtime/lightspeed.yaml
+ifeq ($(wildcard .venv),"")
+	python3 -m venv venv
+	. venv/bin/activate && pip install -r requirements.txt
+else
+	uv pip install -r requirements.txt
+	llama stack build --config ansible-chatbot-build.yaml --image-type venv --image-name .venv
+	cp ansible-chatbot-run.yaml ~/.llama/distributions/.venv/.venv-run.yaml
+	sed -i 's/\/\.llama/~\/\.llama/' ~/.llama/distributions/.venv/.venv-run.yaml
+	sed -i 's/\/ansible-chatbot/\/\.venv/' ~/.llama/distributions/.venv/.venv-run.yaml
+endif
 	@echo "Environment setup complete."
 
 setup-vector-db:
@@ -92,7 +102,13 @@ build-custom: check-env-build-custom build
 	@printf "Custom image $(RED)ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION)$(NC) built successfully.\n"
 
 # Pre-check for required environment variables
-check-env-run:
+check-env-run: check-env-run-base
+	@if [ -z "$(ANSIBLE_CHATBOT_VERSION)" ]; then \
+		printf "$(RED)Error: ANSIBLE_CHATBOT_VERSION is required but not set$(NC)\n"; \
+		exit 1; \
+	fi
+
+check-env-run-base:
 	@if [ -z "$(ANSIBLE_CHATBOT_VLLM_URL)" ]; then \
 		printf "$(RED)Error: ANSIBLE_CHATBOT_VLLM_URL is required but not set$(NC)\n"; \
 		exit 1; \
@@ -103,10 +119,6 @@ check-env-run:
 	fi
 	@if [ -z "$(ANSIBLE_CHATBOT_INFERENCE_MODEL)" ]; then \
 		printf "$(RED)Error: ANSIBLE_CHATBOT_INFERENCE_MODEL is required but not set$(NC)\n"; \
-		exit 1; \
-	fi
-	@if [ -z "$(ANSIBLE_CHATBOT_VERSION)" ]; then \
-		printf "$(RED)Error: ANSIBLE_CHATBOT_VERSION is required but not set$(NC)\n"; \
 		exit 1; \
 	fi
 	@if [ -z "$(AAP_GATEWAY_TOKEN)" ]; then \
@@ -157,6 +169,19 @@ run-local-db: check-env-run-local-db
 	  --env INFERENCE_MODEL_FILTER=$(ANSIBLE_CHATBOT_INFERENCE_MODEL_FILTER) \
 	  --env AAP_GATEWAY_TOKEN=$(AAP_GATEWAY_TOKEN) \
 	  ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION)
+
+run-venv: check-env-run-base
+ifeq ($(wildcard .venv),"")
+	@echo "You need to setup the project with uv to run the service from venv."
+	exit 1
+else
+	LLAMA_STACK_PORT=$(LLAMA_STACK_PORT) \
+	VLLM_URL=$(ANSIBLE_CHATBOT_VLLM_URL) \
+	VLLM_API_TOKEN=$(ANSIBLE_CHATBOT_VLLM_API_TOKEN) \
+	INFERENCE_MODEL=$(ANSIBLE_CHATBOT_INFERENCE_MODEL) \
+	EMBEDDING_MODEL=./embeddings_model \
+	llama stack run ~/.llama/distributions/.venv/.venv-run.yaml
+endif
 
 clean:
 	@echo "Cleaning up..."
