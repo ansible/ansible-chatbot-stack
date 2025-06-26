@@ -160,11 +160,15 @@ run-local-db: check-env-run-local-db
 
 clean:
 	@echo "Cleaning up..."
+	@echo "Cleaning up your local folders..."
+	rm -rf ~/.llama/*
 	rm -rf providers.d/
 	@echo "Removing ansible-chatbot-stack images..."
 	docker rmi -f $$(docker images -a -q --filter reference=ansible-chatbot-stack) || true
 	@echo "Removing ansible-chatbot-stack-base image..."
 	docker rmi -f $$(docker images -a -q --filter reference=ansible-chatbot-stack-base) || true
+	@echo "Removing ansible-chatbot-stack-base containers..."
+	docker rm -f $$(docker ps -a -q --filter ancestor=ansible-chatbot-stack) || true
 	@echo "Clean-up complete."
 
 deploy-k8s:
