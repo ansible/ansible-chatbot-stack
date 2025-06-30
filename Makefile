@@ -89,9 +89,11 @@ check-env-build-custom:
 		exit 1; \
 	fi
 
-build-custom: check-env-build-custom build
+build-custom: check-env-build-custom
 	@echo "Building customized Ansible Chatbot Stack image..."
-	docker build -f Containerfile -t ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION) --build-arg LLAMA_STACK_VERSION=$(LLAMA_STACK_VERSION) .
+	docker build -f Containerfile -t ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION) \
+		--build-arg ANSIBLE_CHATBOT_VERSION=$(ANSIBLE_CHATBOT_VERSION) \
+		--build-arg LLAMA_STACK_VERSION=$(LLAMA_STACK_VERSION) .
 	@printf "Custom image $(RED)ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION)$(NC) built successfully.\n"
 
 # Pre-check required environment variables for build-lsc
@@ -103,7 +105,9 @@ check-env-build-lsc:
 
 build-lsc: check-env-build-lsc
 	@echo "Building customized Ansible Chatbot Stack image from lightspeed-core/lightspeed-stack..."
-	docker build -f ./lightspeed-stack/Containerfile.lsc -t ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION) .
+	docker build -f ./lightspeed-stack/Containerfile.lsc \
+		--build-arg ANSIBLE_CHATBOT_VERSION=$(ANSIBLE_CHATBOT_VERSION) \
+		-t ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION) .
 	@printf "Custom image $(RED)ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION)$(NC) built successfully.\n"
 
 # Pre-check for required environment variables

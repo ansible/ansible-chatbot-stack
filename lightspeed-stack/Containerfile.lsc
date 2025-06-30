@@ -1,3 +1,6 @@
+# Build arguments declared in the global scope.
+ARG ANSIBLE_CHATBOT_VERSION=latest
+
 # ======================================================
 # Transient image to construct Python venv
 # ------------------------------------------------------
@@ -30,6 +33,8 @@ FROM quay.io/lightspeed-core/lightspeed-stack:latest
 
 USER 0
 
+# Re-declaring arguments without a value, inherits the global default one.
+ARG ANSIBLE_CHATBOT_VERSION
 ARG APP_ROOT=/app-root
 RUN microdnf install -y --nodocs --setopt=keepcache=0 --setopt=tsflags=nodocs python3.11
 WORKDIR /app-root
@@ -58,6 +63,11 @@ ENV LLAMA_STACK_CONFIG_DIR=/.llama/data
 RUN mkdir -p /.llama/distributions/ansible-chatbot
 RUN mkdir -p /.llama/data/distributions/ansible-chatbot
 ADD ansible-chatbot-run.yaml /.llama/distributions/ansible-chatbot
+RUN echo -e "\
+{\n\
+  \"version\": \"${ANSIBLE_CHATBOT_VERSION}\" \n\
+}\n\
+" > /.llama/distributions/ansible-chatbot/ansible-chatbot-version-info.json
 ADD llama-stack/providers.d /.llama/providers.d
 RUN chmod -R g+rw /.llama
 
