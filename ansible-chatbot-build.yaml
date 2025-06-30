@@ -26,4 +26,4 @@ additional_pip_packages:
 - sqlalchemy[asyncio]
 - numpy==2.2.6
 
-external_providers_dir: ~/.llama/providers.d
+external_providers_dir: ./llama-stack/providers.d

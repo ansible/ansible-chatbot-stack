@@ -199,7 +199,7 @@ run-local-db: check-env-run-local-db
 clean:
 	@echo "Cleaning up..."
 	@echo "Cleaning up your local folders..."
-	rm -rf ~/.llama/*
+	rm -rf llama-stack/
 	rm -rf providers.d/
 	@echo "Removing ansible-chatbot-stack images..."
 	docker rmi -f $$(docker images -a -q --filter reference=ansible-chatbot-stack) || true
