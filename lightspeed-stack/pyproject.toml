@@ -3,7 +3,7 @@ name = "ansible-chatbot-stack"
 version = "0.1.0"
 description = "Ansible Lightspeed Intelligent Assistant (LSIA)"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     "aiosqlite~=0.21.0",
     "faiss-cpu~=1.11.0",
