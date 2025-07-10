@@ -23,4 +23,4 @@ else
   fi
 fi
 
-python -m llama_stack.distribution.server.server --config /.llama/distributions/ansible-chatbot/ansible-chatbot-run.yaml
+python3.12 src/lightspeed_stack.py --config /.llama/data/lightspeed-stack.yaml

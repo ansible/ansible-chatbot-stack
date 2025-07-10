@@ -7,11 +7,12 @@ ANSIBLE_CHATBOT_VLLM_URL ?=
 ANSIBLE_CHATBOT_VLLM_API_TOKEN ?=
 ANSIBLE_CHATBOT_INFERENCE_MODEL ?=
 ANSIBLE_CHATBOT_INFERENCE_MODEL_FILTER ?=
-AAP_GATEWAY_TOKEN ?=
 LLAMA_STACK_PORT ?= 8321
 LOCAL_DB_PATH ?= .
 CONTAINER_DB_PATH ?= /.llama/data/distributions/ansible-chatbot
-RAG_CONTENT_IMAGE ?= quay.io/ansible/aap-rag-content:latest
+# quay.io/ansible/aap-rag-content:latest does not work with lightspeed-stack:latest
+# aap-rag-content uses llama-stack:0.2.14 whereas lightspeed-stack:latest uses 0.2.13.
+RAG_CONTENT_IMAGE ?= quay.io/ansible/aap-rag-content:1.0.1751985495
 # Colors for terminal output
 RED := \033[0;31m
 NC := \033[0m # No Color
@@ -20,9 +21,6 @@ NC := \033[0m # No Color
 
 .EXPORT_ALL_VARIABLES:
 
-PYPI_VERSION=$(shell cat requirements.txt  | grep llama-stack== | cut -c 14-)
-LLAMA_STACK_VERSION=$(PYPI_VERSION)
-LLAMA_STACK_LOGGING="server=debug;core=info"
 UV_HTTP_TIMEOUT=120
 
 help:
@@ -32,38 +30,31 @@ help:
 	@echo "  all               - Run all steps (setup, build, build-custom)"
 	@echo "  setup             - Sets up llama-stack and the external lightspeed providers"
 	@echo "  setup-vector-db   - Sets up vector DB and embedding model"
-	@echo "  build             - Build the base Ansible Chatbot Stack image"
-	@echo "  build-custom      - Build the customized Ansible Chatbot Stack image"
-	@echo "  build-lsc         - Build the customized Ansible Chatbot Stack image from lightspeed-core/lightspeed-stack"
-	@echo "  run               - Run the Ansible Chatbot Stack container"
+	@echo "  build             - Build the customized Ansible Chatbot Stack image from lightspeed-core/lightspeed-stack"
+	@echo "  run               - Run the Ansible Chatbot Stack container built with 'build-lsc'"
+	@echo "  run-test          - Run some sanity checks for the  Ansible Chatbot Stack container built with 'build-lsc'"
 	@echo "  run-local-db      - Run the Ansible Chatbot Stack container with local DB mapped to conatiner DB"
-	@echo "  run-lsc           - Run the Ansible Chatbot Stack container built with 'build-lsc'"
-	@echo "  run-test-lsc      - Run some sanity checks for the  Ansible Chatbot Stack container built with 'build-lsc'"
 	@echo "  clean             - Clean up generated files and Docker images"
 	@echo "  deploy-k8s        - Deploy to Kubernetes cluster"
 	@echo "  shell             - Get a shell in the container"
 	@echo "  tag-and-push      - Tag and push the container image to quay.io"
 	@echo ""
 	@echo "Required Environment variables:"
-	@echo "  ANSIBLE_CHATBOT_VERSION       	- Version tag for the image (default: $(ANSIBLE_CHATBOT_VERSION))"
-	@echo "  ANSIBLE_CHATBOT_VLLM_URL      	- URL for the vLLM inference provider"
-	@echo "  ANSIBLE_CHATBOT_VLLM_API_TOKEN 	- API token for the vLLM inference provider"
-	@echo "  ANSIBLE_CHATBOT_INFERENCE_MODEL	- Inference model to use"
+	@echo "  ANSIBLE_CHATBOT_VERSION                - Version tag for the image (default: $(ANSIBLE_CHATBOT_VERSION))"
+	@echo "  ANSIBLE_CHATBOT_VLLM_URL               - URL for the vLLM inference provider"
+	@echo "  ANSIBLE_CHATBOT_VLLM_API_TOKEN         - API token for the vLLM inference provider"
+	@echo "  ANSIBLE_CHATBOT_INFERENCE_MODEL        - Inference model to use"
 	@echo "  ANSIBLE_CHATBOT_INFERENCE_MODEL_FILTER	- Inference model to use for tools filtering"
-	@echo "  AAP_GATEWAY_TOKEN                  - API toke for the AAP Gateway"
-	@echo "  CONTAINER_DB_PATH           		- Path to the container database (default: $(CONTAINER_DB_PATH))"
-	@echo "  LOCAL_DB_PATH               		- Path to the local database (default: $(LOCAL_DB_PATH))"
-	@echo "  LLAMA_STACK_PORT              	- Port to expose (default: $(LLAMA_STACK_PORT))"
-	@echo "  QUAY_ORG                		- Quay organization name (default: $(QUAY_ORG))"
+	@echo "  CONTAINER_DB_PATH                      - Path to the container database (default: $(CONTAINER_DB_PATH))"
+	@echo "  LOCAL_DB_PATH                          - Path to the local database (default: $(LOCAL_DB_PATH))"
+	@echo "  LLAMA_STACK_PORT                       - Port to expose (default: $(LLAMA_STACK_PORT))"
+	@echo "  QUAY_ORG                               - Quay organization name (default: $(QUAY_ORG))"
 
 setup: setup-vector-db
 	@echo "Setting up environment..."
-	python3 -m venv venv
-	. venv/bin/activate && pip install -r requirements.txt
+	uv sync
 	mkdir -p llama-stack/providers.d/inline/agents/
-	mkdir -p llama-stack/providers.d/remote/tool_runtime/
 	curl -o llama-stack/providers.d/inline/agents/lightspeed_inline_agent.yaml https://raw.githubusercontent.com/lightspeed-core/lightspeed-providers/refs/heads/main/resources/external_providers/inline/agents/lightspeed_inline_agent.yaml
-	curl -o llama-stack/providers.d/remote/tool_runtime/lightspeed.yaml https://raw.githubusercontent.com/lightspeed-core/lightspeed-providers/refs/heads/main/resources/external_providers/remote/tool_runtime/lightspeed.yaml
 	@echo "Environment setup complete."
 
 setup-vector-db:
@@ -76,36 +67,16 @@ setup-vector-db:
 	docker kill rag-content
 	gzip -d ./vector_db/aap_faiss_store.db.gz
 
-build:
-	@echo "Building base Ansible Chatbot Stack image..."
-	. venv/bin/activate && \
-	llama stack build --config ansible-chatbot-build.yaml --image-type container
-	@printf "Base image $(RED)ansible-chatbot-stack-base$(NC) built successfully.\n"
-
-# Pre-check required environment variables for build-custom
-check-env-build-custom:
+# Pre-check required environment variables for build
+check-env-build:
 	@if [ -z "$(ANSIBLE_CHATBOT_VERSION)" ]; then \
 		printf "$(RED)Error: ANSIBLE_CHATBOT_VERSION is required but not set$(NC)\n"; \
 		exit 1; \
 	fi
 
-build-custom: check-env-build-custom
-	@echo "Building customized Ansible Chatbot Stack image..."
-	docker build -f Containerfile -t ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION) \
-		--build-arg ANSIBLE_CHATBOT_VERSION=$(ANSIBLE_CHATBOT_VERSION) \
-		--build-arg LLAMA_STACK_VERSION=$(LLAMA_STACK_VERSION) .
-	@printf "Custom image $(RED)ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION)$(NC) built successfully.\n"
-
-# Pre-check required environment variables for build-lsc
-check-env-build-lsc:
-	@if [ -z "$(ANSIBLE_CHATBOT_VERSION)" ]; then \
-		printf "$(RED)Error: ANSIBLE_CHATBOT_VERSION is required but not set$(NC)\n"; \
-		exit 1; \
-	fi
-
-build-lsc: check-env-build-lsc
+build: check-env-build
 	@echo "Building customized Ansible Chatbot Stack image from lightspeed-core/lightspeed-stack..."
-	docker build -f ./lightspeed-stack/Containerfile.lsc \
+	docker build -f ./Containerfile \
 		--build-arg ANSIBLE_CHATBOT_VERSION=$(ANSIBLE_CHATBOT_VERSION) \
 		-t ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION) .
 	@printf "Custom image $(RED)ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION)$(NC) built successfully.\n"
@@ -128,42 +99,22 @@ check-env-run:
 		printf "$(RED)Error: ANSIBLE_CHATBOT_VERSION is required but not set$(NC)\n"; \
 		exit 1; \
 	fi
-	@if [ -z "$(AAP_GATEWAY_TOKEN)" ]; then \
-		printf "$(RED)Error: AAP_GATEWAY_TOKEN is required but not set$(NC)\n"; \
-		exit 1; \
-	fi
 
 run: check-env-run
-	@echo "Running Ansible Chatbot Stack container..."
-	@echo "Using vLLM URL: $(ANSIBLE_CHATBOT_VLLM_URL)"
-	@echo "Using inference model: $(ANSIBLE_CHATBOT_INFERENCE_MODEL)"
-	docker run --security-opt label=disable -it -p $(LLAMA_STACK_PORT):$(LLAMA_STACK_PORT) \
-	  -v ./embeddings_model:/app/embeddings_model \
-	  -v ./vector_db/aap_faiss_store.db:$(CONTAINER_DB_PATH)/aap_faiss_store.db \
-	  --env LLAMA_STACK_PORT=$(LLAMA_STACK_PORT) \
-	  --env VLLM_URL=$(ANSIBLE_CHATBOT_VLLM_URL) \
-	  --env VLLM_API_TOKEN=$(ANSIBLE_CHATBOT_VLLM_API_TOKEN) \
-	  --env INFERENCE_MODEL=$(ANSIBLE_CHATBOT_INFERENCE_MODEL) \
-	  --env INFERENCE_MODEL_FILTER=$(ANSIBLE_CHATBOT_INFERENCE_MODEL_FILTER) \
-	  --env AAP_GATEWAY_TOKEN=$(AAP_GATEWAY_TOKEN) \
-	  ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION)
-
-run-lsc: check-env-run
 	@echo "Running Ansible Chatbot Stack container..."
 	@echo "Using vLLM URL: $(ANSIBLE_CHATBOT_VLLM_URL)"
 	@echo "Using inference model: $(ANSIBLE_CHATBOT_INFERENCE_MODEL)"
 	docker run --security-opt label=disable -it -p $(LLAMA_STACK_PORT):8080 \
 	  -v ./embeddings_model:/.llama/data/embeddings_model \
 	  -v ./vector_db/aap_faiss_store.db:$(CONTAINER_DB_PATH)/aap_faiss_store.db \
-	  -v ./lightspeed-stack/lightspeed-stack.yaml:/.llama/data/lightspeed-stack.yaml \
+	  -v ./lightspeed-stack.yaml:/.llama/data/lightspeed-stack.yaml \
 	  --env VLLM_URL=$(ANSIBLE_CHATBOT_VLLM_URL) \
 	  --env VLLM_API_TOKEN=$(ANSIBLE_CHATBOT_VLLM_API_TOKEN) \
 	  --env INFERENCE_MODEL=$(ANSIBLE_CHATBOT_INFERENCE_MODEL) \
 	  --env INFERENCE_MODEL_FILTER=$(ANSIBLE_CHATBOT_INFERENCE_MODEL_FILTER) \
-	  --env AAP_GATEWAY_TOKEN=$(AAP_GATEWAY_TOKEN) \
 	  ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION)
 
-run-test-lsc:
+run-test:
 	@echo "Running test query against lightspeed-core/lightspeed-stack's /config endpoint..."
 	curl -X GET http://localhost:$(LLAMA_STACK_PORT)/v1/config | jq .
 	@echo "Running test query against lightspeed-core/lightspeed-stack's /models endpoint..."
@@ -188,16 +139,15 @@ run-local-db: check-env-run-local-db
 	@echo "Using inference model: $(ANSIBLE_CHATBOT_INFERENCE_MODEL)"
 	@echo "Using inference model for tools filtering : $(ANSIBLE_CHATBOT_INFERENCE_MODEL_FILTER)"
 	@echo "Mapping local DB from $(LOCAL_DB_PATH) to $(CONTAINER_DB_PATH)"
-	docker run --security-opt label=disable -it -p $(LLAMA_STACK_PORT):$(LLAMA_STACK_PORT) \
+	docker run --security-opt label=disable -it -p $(LLAMA_STACK_PORT):8080 \
 	  -v $(LOCAL_DB_PATH):$(CONTAINER_DB_PATH) \
 	  -v ./embeddings_model:/app/embeddings_model \
 	  -v ./vector_db/aap_faiss_store.db:$(CONTAINER_DB_PATH)/aap_faiss_store.db \
-	  --env LLAMA_STACK_PORT=$(LLAMA_STACK_PORT) \
+	  -v ./lightspeed-stack.yaml:/.llama/data/lightspeed-stack.yaml \
 	  --env VLLM_URL=$(ANSIBLE_CHATBOT_VLLM_URL) \
 	  --env VLLM_API_TOKEN=$(ANSIBLE_CHATBOT_VLLM_API_TOKEN) \
 	  --env INFERENCE_MODEL=$(ANSIBLE_CHATBOT_INFERENCE_MODEL) \
 	  --env INFERENCE_MODEL_FILTER=$(ANSIBLE_CHATBOT_INFERENCE_MODEL_FILTER) \
-	  --env AAP_GATEWAY_TOKEN=$(AAP_GATEWAY_TOKEN) \
 	  ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION)
 
 clean:
@@ -207,9 +157,7 @@ clean:
 	rm -rf providers.d/
 	@echo "Removing ansible-chatbot-stack images..."
 	docker rmi -f $$(docker images -a -q --filter reference=ansible-chatbot-stack) || true
-	@echo "Removing ansible-chatbot-stack-base image..."
-	docker rmi -f $$(docker images -a -q --filter reference=ansible-chatbot-stack-base) || true
-	@echo "Removing ansible-chatbot-stack-base containers..."
+	@echo "Removing ansible-chatbot-stack containers..."
 	docker rm -f $$(docker ps -a -q --filter ancestor=ansible-chatbot-stack) || true
 	@echo "Clean-up complete."
 

@@ -68,10 +68,9 @@ providers:
   - provider_id: rag-runtime
     provider_type: inline::rag-runtime
     config: {}
-  - provider_id: lightspeed
-    provider_type: remote::lightspeed
-    config:
-      api_key: ${env.AAP_GATEWAY_TOKEN:}
+  - provider_id: model-context-protocol
+    provider_type: remote::model-context-protocol
+    config: {}
 metadata_store: null
 models:
 - metadata: {}

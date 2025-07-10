@@ -1,4 +1,0 @@
-llama-stack==0.2.12
-llama-stack-client==0.2.12
-fire==0.7.0
-lightspeed_stack_providers==0.1.9
