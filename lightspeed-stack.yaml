@@ -12,3 +12,5 @@ llama_stack:
 user_data_collection:
   feedback_disabled: true
   transcripts_disabled: true
+customization:
+  system_prompt_path: /.llama/distributions/ansible-chatbot/ansible-chatbot-system-prompt.txt
