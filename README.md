@@ -1,78 +1,113 @@
 # Ansible Chatbot (llama) Stack
 
-An Ansible Chatbot (llama) Stack [custom distribution](https://llama-stack.readthedocs.io/en/latest/distributions/building_distro.html) (`Container` type).
+This repository contains the necessary configuration to build a Docker Container Image for `ansible-chatbot-stack`.
 
-It includes:
+`ansible-chatbot-stack` builds on top of `lightspeed-stack` that wraps Meta's `llama-stack` AI framework.
+
+`ansible-chatbot-stack` includes various customisations for:
 
 - A remote vLLM inference provider (RHOSAI vLLM compatible)
 - The inline sentence transformers (Meta)
 - AAP RAG database files and configuration
 - [Lightspeed external providers](https://github.com/lightspeed-core/lightspeed-providers)
-- Other default providers from the [Remote vLLM distribution](https://llama-stack.readthedocs.io/en/latest/distributions/self_hosted_distro/remote-vllm.html) as well
+- System Prompt injection
 
 Build/Run overview:
 
 ```mermaid
 flowchart TB
 %% Nodes
-    CHATBOT_STACK([fa:fa-layer-group ansible-chatbot-stack-base:x.y.z])
-    AAP_CHATBOT_STACK([fa:fa-layer-group ansible-chatbot-stack:x.y.z])
-    AAP_CHATBOT([fa:fa-comment Ansible Chatbot Service])
-    CHATBOT_BUILD_CONFIG{{fa:fa-wrench ansible-chatbot-build.yaml}}
-    CHATBOT_RUN_CONFIG{{fa:fa-wrench ansible-chatbot-run.yaml}}
-    AAP_CHATBOT_DOCKERFILE{{fa:fa-wrench Containerfile}}
-    Lightspeed_Providers("fa:fa-code-branch lightspeed-providers")
+    LLAMA_STACK([fa:fa-layer-group llama-stack:x.y.z])
+    LIGHTSPEED_STACK([fa:fa-layer-group lightspeed-stack:x.y.z])
+    LIGHTSPEED_RUN_CONFIG{{fa:fa-wrench lightspeed-stack.yaml}}
+    ANSIBLE_CHATBOT_STACK([fa:fa-layer-group ansible-chatbot-stack:x.y.z])
+    ANSIBLE_CHATBOT_RUN_CONFIG{{fa:fa-wrench ansible-chatbot-run.yaml}}
+    ANSIBLE_CHATBOT_DOCKERFILE{{fa:fa-wrench Containerfile}}
+    ANSIBLE_LIGHTSPEED([fa:fa-layer-group ansible-ai-connect-service:x.y.z])
+    LIGHTSPEED_PROVIDERS("fa:fa-code-branch lightspeed-providers:x.y.z")
     PYPI("fa:fa-database PyPI")
 
 %% Edge connections between nodes
-    CHATBOT_STACK -- Consumes --> PYPI
-    Lightspeed_Providers -- Publishes --> PYPI
-    CHATBOT_STACK -- Built from --> CHATBOT_BUILD_CONFIG
-    AAP_CHATBOT_STACK -- Built from --> AAP_CHATBOT_DOCKERFILE
-    AAP_CHATBOT_STACK -- inherits from --> CHATBOT_STACK
-    AAP_CHATBOT -- Uses --> CHATBOT_RUN_CONFIG
-    AAP_CHATBOT_STACK -- Runtime --> AAP_CHATBOT
+    ANSIBLE_LIGHTSPEED -- Uses --> ANSIBLE_CHATBOT_STACK
+    ANSIBLE_CHATBOT_STACK -- Consumes --> PYPI
+    LIGHTSPEED_PROVIDERS -- Publishes --> PYPI
+    ANSIBLE_CHATBOT_STACK -- Built from --> ANSIBLE_CHATBOT_DOCKERFILE
+    ANSIBLE_CHATBOT_STACK -- Inherits from --> LIGHTSPEED_STACK
+    ANSIBLE_CHATBOT_STACK -- Includes --> LIGHTSPEED_RUN_CONFIG
+    ANSIBLE_CHATBOT_STACK -- Includes --> ANSIBLE_CHATBOT_RUN_CONFIG
+    LIGHTSPEED_STACK -- Embeds --> LLAMA_STACK
+    LIGHTSPEED_STACK -- Uses --> LIGHTSPEED_RUN_CONFIG
+    LLAMA_STACK -- Uses --> ANSIBLE_CHATBOT_RUN_CONFIG
 ```
 
 ## Build
 
 ### Setup for Ansible Chatbot Stack
 
----
-
-> Actually using temporary [lightspeed stack providers](https://pypi.org/project/lightspeed-stack-providers/) package, otherwise further need for [lightspeed external providers](https://github.com/lightspeed-core/lightspeed-providers) available on PyPI
-
-- Install llama-stack on the host machine, if not present.
-- External providers YAML manifests must be present in `providers.d/` of your host's llama-stack directory.
-- External providers' python libraries must be in the container's python's library path, but also in the host machine's python library path. It is a workaround for [this hack](https://github.com/meta-llama/llama-stack/blob/0cc07311890c00feb5bbd40f5052c8a84a88aa65/llama_stack/cli/stack/_build.py#L299).
-- Vector DB and embedding image files are copied from the latest `aap-rag-content` image to `./vector_db` and `./embeddings_model` respectively.
+- External Providers YAML manifests must be present in `providers.d/` of your host's `llama-stack` directory.
+- Vector Database is copied from the latest `aap-rag-content` image to `./vector_db`.
+- Embeddings image files are copied from the latest `aap-rag-content` image to `./embeddings_model`.
 
 ```shell
         make setup
 ```
 
-### Building the Ansible Chatbot Stack
+### Building Ansible Chatbot Stack
 
----
+Builds the image `ansible-chatbot-stack:$ANSIBLE_CHATBOT_VERSION`.
 
-> Builds the image `ansible-chatbot-stack-base:$PYPI_VERSION`.
-
-```shell
-    make build
-```
-
-### Customizing the Ansible Chatbot Stack
-
----
-
-> Builds the image `ansible-chatbot-stack:$ANSIBLE_CHATBOT_VERSION`.
+> Change the `ANSIBLE_CHATBOT_VERSION` version and inference parameters below accordingly.
 
 ```shell
     export ANSIBLE_CHATBOT_VERSION=0.0.1
-    make build-custom
- ```
+    
+    make build
+```
+
+### Container file structure
+
+#### Files from `lightspeed-stack` base image
+```commandline
+└── app-root/
+    ├── .venv/
+    └── src/
+        ├── <lightspeed-stack files>
+        └── lightspeed_stack.py
+````
+
+#### Runtime files
+
+> These are stored in a `PersistentVolumeClaim` for resilience
+```commandline
+└── .llama/
+    └── data/
+        └── distributions/
+            └── ansible-chatbot/
+                ├── aap_faiss_store.db
+                ├── agents_store.db
+                ├── responses_store.db
+                ├── localfs_datasetio.db
+                ├── trace_store.db
+                └── embeddings_model/
+```
+
+#### Configuration files
+```commandline
+└── .llama/
+    ├── distributions/
+    │   └── ansible-chatbot/
+    │       ├── lightspeed-stack.yaml
+    │       ├── ansible-chatbot-run.yaml
+    │       ├── ansible-chatbot-version-info.json
+    │       └── system-prompts/
+    │           └── default.txt
+    └── providers.d
+        └── <llama-stack external providers>
+```
 
 ## Run
+
+Runs the image `ansible-chatbot-stack:$ANSIBLE_CHATBOT_VERSION` as a local container.
 
 > Change the `ANSIBLE_CHATBOT_VERSION` version and inference parameters below accordingly.
 
@@ -82,8 +117,24 @@ flowchart TB
     export ANSIBLE_CHATBOT_VLLM_API_TOKEN=<YOUR_MODEL_SERVING_API_TOKEN>
     export ANSIBLE_CHATBOT_INFERENCE_MODEL=<YOUR_INFERENCE_MODEL>
     export ANSIBLE_CHATBOT_INFERENCE_MODEL_FILTER=<YOUR_INFERENCE_MODEL_TOOLS_FILTERING>
-    export AAP_GATEWAY_TOKEN=<YOUR_AAP_GATEWAY_TOKEN>
+    
     make run
+```
+
+## Basic tests
+
+Runs basic tests against the local container.
+
+> Change the `ANSIBLE_CHATBOT_VERSION` version and inference parameters below accordingly.
+
+```shell
+    export ANSIBLE_CHATBOT_VERSION=0.0.1
+    export ANSIBLE_CHATBOT_VLLM_URL=<YOUR_MODEL_SERVING_URL>
+    export ANSIBLE_CHATBOT_VLLM_API_TOKEN=<YOUR_MODEL_SERVING_API_TOKEN>
+    export ANSIBLE_CHATBOT_INFERENCE_MODEL=<YOUR_INFERENCE_MODEL>
+    export ANSIBLE_CHATBOT_INFERENCE_MODEL_FILTER=<YOUR_INFERENCE_MODEL_TOOLS_FILTERING>
+    
+    make run-test
 ```
 
 ## Deploy into a k8s cluster
@@ -108,51 +159,6 @@ If you have the need for re-building images, apply the following clean-ups right
 
 ```shell
     make clean
-```
-
-## Appendix - Testing by using the CLI client
-
-```shell
-    > llama-stack-client --configure ...
-
-    > llama-stack-client models list
-    ┏━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-    ┃ model_type             ┃ identifier                                       ┃ provider_resource_id                             ┃ metadata                                                       ┃ provider_id                                ┃
-    ┡━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-    │ llm                    │ granite-3.3-8b-instruct                          │ granite-3.3-8b-instruct                          │                                                                │ rhosai_vllm_dev                            │
-    ├────────────────────────┼──────────────────────────────────────────────────┼──────────────────────────────────────────────────┼────────────────────────────────────────────────────────────────┼────────────────────────────────────────────┤
-    │ embedding              │ all-MiniLM-L6-v2                                 │ all-MiniLM-L6-v2                                 │ {'embedding_dimension': 384.0}                                 │ inline_sentence-transformer                │
-    └────────────────────────┴──────────────────────────────────────────────────┴──────────────────────────────────────────────────┴────────────────────────────────────────────────────────────────┴────────────────────────────────────────────┘
-
-    > llama-stack-client providers list
-    ┏━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-    ┃ API          ┃ Provider ID                  ┃ Provider Type                        ┃
-    ┡━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-    │ inference    │ rhosai_vllm_dev              │ remote::vllm                         │
-    │ inference    │ inline_sentence-transformer  │ inline::sentence-transformers        │
-    │ vector_io    │ aap_faiss                    │ inline::faiss                        │
-    │ safety       │ llama-guard                  │ inline::llama-guard                  │
-    │ safety       │ lightspeed_question_validity │ inline::lightspeed_question_validity │
-    │ agents       │ meta-reference               │ inline::meta-reference               │
-    │ datasetio    │ localfs                      │ inline::localfs                      │
-    │ telemetry    │ meta-reference               │ inline::meta-reference               │
-    │ tool_runtime │ rag-runtime-0                │ inline::rag-runtime                  │
-    │ tool_runtime │ model-context-protocol-1     │ remote::model-context-protocol       │
-    │ tool_runtime │ lightspeed                   │ remote::lightspeed                   │
-    └──────────────┴──────────────────────────────┴──────────────────────────────────────┘
-
-    > llama-stack-client vector_dbs list
-    ┏━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-    ┃ identifier           ┃ provider_id ┃ provider_resource_id ┃ vector_db_type ┃ params                            ┃
-    ┡━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-    │ aap-product-docs-2_5 │ aap_faiss   │ aap-product-docs-2_5 │                │ embedding_dimension: 384          │
-    │                      │             │                      │                │ embedding_model: all-MiniLM-L6-v2 │
-    │                      │             │                      │                │ type: vector_db                   │
-    │                      │             │                      │                │                                   │
-    └──────────────────────┴─────────────┴──────────────────────┴────────────────┴───────────────────────────────────┘
-
-    > llama-stack-client inference chat-completion --message "tell me about Ansible Lightspeed"
-    ...
 ```
 
 ## Appendix - Obtain a container shell

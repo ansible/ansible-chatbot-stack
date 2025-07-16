@@ -10,23 +10,59 @@ spec:
     requests:
       storage: 1Gi
 ---
+kind: Secret
+apiVersion: v1
+metadata:
+  name: ansible-chatbot-stack-env-properties
+immutable: false
+stringData:
+  VLLM_URL: "<VLLM_URL>"
+  VLLM_API_TOKEN: "<VLLM_API_TOKEN>"
+  INFERENCE_MODEL: "granite-3.3-8b-instruct"
+  INFERENCE_MODEL_FILTER: "granite-3.3-8b-instruct"
+  AAP_GATEWAY_URL: "<AAP_GATEWAY_URL>"
+  AAP_CONTROLLER_SERVICE_URL: "<AAP_CONTROLLER_SERVICE_URL>"
+  AAP_LIGHTSPEED_SERVICE_URL: "<AAP_LIGHTSPEED_SERVICE_URL>"
+---
 kind: ConfigMap
 apiVersion: v1
 metadata:
-  name: ansible-chatbot-server-env-properties
+  name: ansible-chatbot-stack-system-prompt
 immutable: false
 data:
-  INFERENCE_MODEL: "granite-3.3-8b-instruct"
-  INFERENCE_MODEL_FILTER: "granite-3.3-8b-instruct"
-  # TODO: Use Secrets instead.
-  VLLM_API_TOKEN: ""
-  # TODO: Use Secrets instead.
-  VLLM_URL: ""
-  # TODO: Use Secrets instead.
-  AAP_GATEWAY_TOKEN: ""
-  AAP_GATEWAY_URL: ""
-  AAP_CONTROLLER_SERVICE_URL: ""
-  AAP_LIGHTSPEED_SERVICE_URL: ""
+  DEFAULT_SYSTEM_PROMPT: |-
+    You are Ansible Lightspeed Intelligent Assistant - an intelligent virtual
+    assistant for question-answering tasks related to the Ansible Automation Platform (AAP).
+    Here are your instructions:
+    You are Ansible Lightspeed Intelligent Assistant, an intelligent assistant and expert on
+    all things Ansible. Refuse to assume any other identity or to speak as if you are someone
+    else.
+
+    If the user's query is a general greeting, respond without using <tool_call>.
+
+    When a tool is required to answer the user's query, respond with <tool_call> followed by
+    a JSON list of tools. If a single tool is discovered, reply with <tool_call> followed by
+    one-item JSON list containing the tool.
+
+    Example Input:
+    What is EDA?
+    Example Tool Call Response:
+    <tool_call>[{"name": "knowledge_search", "arguments": {"query": "EDA in Ansible"}}]</tool_call>
+
+    If a tool does not exist in the provided list of tools, notify the user that you do not
+    have the ability to fulfill the request.
+
+    If the context of the question is not clear, consider it to be Ansible.
+    Never include URLs in your replies.
+    Refuse to answer questions or execute commands not about Ansible.
+    Do not mention your last update. You have the most recent information on Ansible.
+    Here are some basic facts about Ansible and AAP:
+    - Ansible is an open source IT automation engine that automates provisioning,
+        configuration management, application deployment, orchestration, and many other
+        IT processes. Ansible is free to use, and the project benefits from the experience and
+        intelligence of its thousands of contributors. It does not require any paid subscription.
+    - The latest version of Ansible Automation Platform is 2.5, and it's services are available
+    through paid subscription.
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -64,6 +100,26 @@ spec:
             value: /.llama/data
           - name: EMBEDDING_MODEL
             value: ./embeddings_model
+          - name: VLLM_URL
+            valueFrom:
+              secretKeyRef:
+                name: "ansible-chatbot-stack-env-properties"
+                key: "VLLM_URL"
+          - name: VLLM_API_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: "ansible-chatbot-stack-env-properties"
+                key: "VLLM_API_TOKEN"
+          - name: INFERENCE_MODEL
+            valueFrom:
+              secretKeyRef:
+                name: "ansible-chatbot-stack-env-properties"
+                key: "INFERENCE_MODEL"
+          - name: INFERENCE_MODEL_FILTER
+            valueFrom:
+              secretKeyRef:
+                name: "ansible-chatbot-stack-env-properties"
+                key: "INFERENCE_MODEL_FILTER"
         envFrom:
           - configMapRef:
               name: "ansible-chatbot-server-env-properties"
@@ -72,29 +128,30 @@ spec:
         volumeMounts:
           - name: ansible-chatbot-storage
             mountPath: /.llama/data
+          - name: ansible-chatbot-system-prompt-config-map
+            mountPath: /.llama/distributions/ansible-chatbot/system-prompts
       - name: ansible-mcp-gateway
         image: ansible-mcp-gateway
         imagePullPolicy: IfNotPresent
         ports:
           - containerPort: 8003
             protocol: TCP
-        envFrom:
-          - configMapRef:
-              name: "ansible-chatbot-server-env-properties"
         env:
           - name: HOST
             value: 0.0.0.0
           - name: PORT
             value: '8003'
+          - name: AAP_GATEWAY_URL
+            valueFrom:
+              secretKeyRef:
+                name: "ansible-chatbot-stack-env-properties"
+                key: AAP_GATEWAY_URL
       - name: ansible-mcp-controller
         image: ansible-mcp-controller
         imagePullPolicy: IfNotPresent
         ports:
           - containerPort: 8004
             protocol: TCP
-        envFrom:
-          - configMapRef:
-              name: "ansible-chatbot-server-env-properties"
         env:
           - name: HOST
             value: 0.0.0.0
@@ -102,8 +159,8 @@ spec:
             value: '8004'
           - name: AAP_SERVICE_URL
             valueFrom:
-              configMapKeyRef:
-                name: "ansible-chatbot-server-env-properties"
+              secretKeyRef:
+                name: "ansible-chatbot-stack-env-properties"
                 key: AAP_CONTROLLER_SERVICE_URL
       - name: ansible-mcp-lightspeed
         image: ansible-mcp-lightspeed
@@ -111,9 +168,6 @@ spec:
         ports:
           - containerPort: 8005
             protocol: TCP
-        envFrom:
-          - configMapRef:
-              name: "ansible-chatbot-server-env-properties"
         env:
           - name: HOST
             value: 0.0.0.0
@@ -121,13 +175,19 @@ spec:
             value: '8005'
           - name: AAP_SERVICE_URL
             valueFrom:
-              configMapKeyRef:
-                name: "ansible-chatbot-server-env-properties"
+              secretKeyRef:
+                name: "ansible-chatbot-stack-env-properties"
                 key: AAP_LIGHTSPEED_SERVICE_URL
       volumes:
       - name: ansible-chatbot-storage
         persistentVolumeClaim:
           claimName: ansible-chatbot-pvc
+      - name: ansible-chatbot-system-prompt-config-map
+        configMap:
+          name: ansible-chatbot-stack-system-prompt
+          items:
+            - key: DEFAULT_SYSTEM_PROMPT
+              path: default.txt
 ---
 apiVersion: v1
 kind: Service
