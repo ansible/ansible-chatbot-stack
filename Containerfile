@@ -4,11 +4,9 @@ ARG ANSIBLE_CHATBOT_VERSION=latest
 # ======================================================
 # Transient image to construct Python venv
 # ------------------------------------------------------
-FROM registry.access.redhat.com/ubi9/ubi-minimal AS builder
+FROM quay.io/lightspeed-core/lightspeed-stack:dev-latest
 
 ARG APP_ROOT=/app-root
-RUN microdnf install -y --nodocs --setopt=keepcache=0 --setopt=tsflags=nodocs \
-    python3.12 python3.12-devel python3.12-pip
 WORKDIR /app-root
 
 # UV_PYTHON_DOWNLOADS=0 : Disable Python interpreter downloads and use the system interpreter.
@@ -16,15 +14,11 @@ ENV UV_COMPILE_BYTECODE=0 \
     UV_LINK_MODE=copy \
     UV_PYTHON_DOWNLOADS=0
 
-# Install uv package manager
-RUN pip3.12 install uv
-
 # Add explicit files and directories
 # (avoid accidental inclusion of local directories or env files or credentials)
-COPY pyproject.toml uv.lock LICENSE.md README.md ./
+COPY pyproject.toml LICENSE.md README.md ./
 
-RUN uv sync --locked --no-install-project --no-dev
-# ======================================================
+RUN uv pip install .
 
 # ======================================================
 # Final image without uv package manager
@@ -36,7 +30,6 @@ USER 0
 # Re-declaring arguments without a value, inherits the global default one.
 ARG APP_ROOT
 ARG ANSIBLE_CHATBOT_VERSION
-RUN microdnf install -y --nodocs --setopt=keepcache=0 --setopt=tsflags=nodocs python3.11 jq
 
 # PYTHONDONTWRITEBYTECODE 1 : disable the generation of .pyc
 # PYTHONUNBUFFERED 1 : force the stdout and stderr streams to be unbuffered
