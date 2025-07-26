@@ -10,9 +10,7 @@ ANSIBLE_CHATBOT_INFERENCE_MODEL_FILTER ?=
 LLAMA_STACK_PORT ?= 8321
 LOCAL_DB_PATH ?= .
 CONTAINER_DB_PATH ?= /.llama/data/distributions/ansible-chatbot
-# quay.io/ansible/aap-rag-content:latest does not work with lightspeed-stack:latest
-# aap-rag-content uses llama-stack:0.2.14 whereas lightspeed-stack:latest uses 0.2.13.
-RAG_CONTENT_IMAGE ?= quay.io/ansible/aap-rag-content:1.0.1751985495
+RAG_CONTENT_IMAGE ?= quay.io/ansible/aap-rag-content:latest
 # Colors for terminal output
 RED := \033[0;31m
 NC := \033[0m # No Color
@@ -61,7 +59,8 @@ setup-vector-db:
 	@echo "Setting up vector db and embedding image..."
 	rm -rf ./vector_db ./embeddings_model
 	mkdir -p ./vector_db
-	docker run -d --rm --name rag-content $(RAG_CONTENT_IMAGE) sleep infinity
+	# Always pull the latest RAG image even if an image with the "latest" tag is found locally
+	docker run -d --rm --name rag-content --pull always $(RAG_CONTENT_IMAGE) sleep infinity
 	docker cp rag-content:/rag/llama_stack_vector_db/faiss_store.db.gz ./vector_db/aap_faiss_store.db.gz
 	docker cp rag-content:/rag/embeddings_model .
 	docker kill rag-content
