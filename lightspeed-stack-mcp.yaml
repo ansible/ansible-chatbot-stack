@@ -14,3 +14,10 @@ user_data_collection:
   transcripts_disabled: true
 customization:
   system_prompt_path: /.llama/distributions/ansible-chatbot/system-prompts/default.txt
+mcp_servers:
+- name: mcp::aap-controller
+  provider_id: model-context-protocol
+  url: http://localhost:8004/sse
+- name: mcp::aap-lightspeed
+  provider_id: model-context-protocol
+  url: http://localhost:8005/sse

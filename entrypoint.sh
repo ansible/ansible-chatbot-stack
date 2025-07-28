@@ -23,4 +23,4 @@ else
   fi
 fi
 
-python3.12 /app-root/src/lightspeed_stack.py --config /.llama/distributions/ansible-chatbot/lightspeed-stack.yaml
+python3.12 /app-root/src/lightspeed_stack.py --config /.llama/distributions/ansible-chatbot/config/lightspeed-stack.yaml

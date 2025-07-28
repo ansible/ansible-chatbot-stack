@@ -10,9 +10,9 @@ ANSIBLE_CHATBOT_INFERENCE_MODEL_FILTER ?=
 LLAMA_STACK_PORT ?= 8321
 LOCAL_DB_PATH ?= .
 CONTAINER_DB_PATH ?= /.llama/data/distributions/ansible-chatbot
-# quay.io/ansible/aap-rag-content:latest does not work with lightspeed-stack:latest
-# aap-rag-content uses llama-stack:0.2.14 whereas lightspeed-stack:latest uses 0.2.13.
-RAG_CONTENT_IMAGE ?= quay.io/ansible/aap-rag-content:1.0.1751985495
+RAG_CONTENT_IMAGE ?= quay.io/ansible/aap-rag-content:latest
+LIGHTSPEED_STACK_CONFIG ?= lightspeed-stack.yaml
+LLAMA_STACK_RUN_CONFIG ?= ansible-chatbot-run.yaml
 # Colors for terminal output
 RED := \033[0;31m
 NC := \033[0m # No Color
@@ -22,6 +22,8 @@ NC := \033[0m # No Color
 .EXPORT_ALL_VARIABLES:
 
 UV_HTTP_TIMEOUT=120
+
+PLATFORM ?= "linux/amd64"
 
 help:
 	@echo "Makefile for Ansible Chatbot Stack"
@@ -61,7 +63,7 @@ setup-vector-db:
 	@echo "Setting up vector db and embedding image..."
 	rm -rf ./vector_db ./embeddings_model
 	mkdir -p ./vector_db
-	docker run -d --rm --name rag-content $(RAG_CONTENT_IMAGE) sleep infinity
+	docker run --platform $(PLATFORM) -d --rm --name rag-content $(RAG_CONTENT_IMAGE) sleep infinity
 	docker cp rag-content:/rag/llama_stack_vector_db/faiss_store.db.gz ./vector_db/aap_faiss_store.db.gz
 	docker cp rag-content:/rag/embeddings_model .
 	docker kill rag-content
@@ -76,8 +78,9 @@ check-env-build:
 
 build: check-env-build
 	@echo "Building customized Ansible Chatbot Stack image from lightspeed-core/lightspeed-stack..."
-	docker build -f ./Containerfile \
+	docker build --platform $(PLATFORM) -f ./Containerfile \
 		--build-arg ANSIBLE_CHATBOT_VERSION=$(ANSIBLE_CHATBOT_VERSION) \
+		--build-arg LLAMA_STACK_RUN_CONFIG=$(LLAMA_STACK_RUN_CONFIG) \
 		-t ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION) .
 	@printf "Custom image $(RED)ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION)$(NC) built successfully.\n"
 
@@ -104,10 +107,11 @@ run: check-env-run
 	@echo "Running Ansible Chatbot Stack container..."
 	@echo "Using vLLM URL: $(ANSIBLE_CHATBOT_VLLM_URL)"
 	@echo "Using inference model: $(ANSIBLE_CHATBOT_INFERENCE_MODEL)"
-	docker run --security-opt label=disable -it -p $(LLAMA_STACK_PORT):8080 \
+	docker run --platform $(PLATFORM) --security-opt label=disable -it -p $(LLAMA_STACK_PORT):8080 \
 	  -v ./embeddings_model:/.llama/data/embeddings_model \
 	  -v ./vector_db/aap_faiss_store.db:$(CONTAINER_DB_PATH)/aap_faiss_store.db \
-	  -v ./lightspeed-stack.yaml:/.llama/data/lightspeed-stack.yaml \
+	  -v ./$(LIGHTSPEED_STACK_CONFIG):/.llama/distributions/ansible-chatbot/config/lightspeed-stack.yaml \
+	  -v ./$(LLAMA_STACK_RUN_CONFIG):/.llama/distributions/llama-stack/config/ansible-chatbot-run.yaml \
 	  -v ./ansible-chatbot-system-prompt.txt:/.llama/distributions/ansible-chatbot/system-prompts/default.txt \
 	  --env VLLM_URL=$(ANSIBLE_CHATBOT_VLLM_URL) \
 	  --env VLLM_API_TOKEN=$(ANSIBLE_CHATBOT_VLLM_API_TOKEN) \
@@ -140,11 +144,13 @@ run-local-db: check-env-run-local-db
 	@echo "Using inference model: $(ANSIBLE_CHATBOT_INFERENCE_MODEL)"
 	@echo "Using inference model for tools filtering : $(ANSIBLE_CHATBOT_INFERENCE_MODEL_FILTER)"
 	@echo "Mapping local DB from $(LOCAL_DB_PATH) to $(CONTAINER_DB_PATH)"
-	docker run --security-opt label=disable -it -p $(LLAMA_STACK_PORT):8080 \
+	docker run --platform $(PLATFORM) --security-opt label=disable -it -p $(LLAMA_STACK_PORT):8080 \
 	  -v $(LOCAL_DB_PATH):$(CONTAINER_DB_PATH) \
 	  -v ./embeddings_model:/app/embeddings_model \
 	  -v ./vector_db/aap_faiss_store.db:$(CONTAINER_DB_PATH)/aap_faiss_store.db \
-	  -v ./lightspeed-stack.yaml:/.llama/data/lightspeed-stack.yaml \
+	  -v ./$(LIGHTSPEED_STACK_CONFIG):/.llama/distributions/ansible-chatbot/config/lightspeed-stack.yaml \
+	  -v ./$(LLAMA_STACK_RUN_CONFIG):/.llama/distributions/llama-stack/config/ansible-chatbot-run.yaml \
+	  -v ./ansible-chatbot-system-prompt.txt:/.llama/distributions/ansible-chatbot/system-prompts/default.txt \
 	  --env VLLM_URL=$(ANSIBLE_CHATBOT_VLLM_URL) \
 	  --env VLLM_API_TOKEN=$(ANSIBLE_CHATBOT_VLLM_API_TOKEN) \
 	  --env INFERENCE_MODEL=$(ANSIBLE_CHATBOT_INFERENCE_MODEL) \

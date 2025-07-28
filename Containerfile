@@ -29,14 +29,16 @@ RUN uv sync --locked --no-install-project --no-dev
 # ======================================================
 # Final image without uv package manager
 # ------------------------------------------------------
-FROM quay.io/lightspeed-core/lightspeed-stack:dev-latest
+#FROM quay.io/lightspeed-core/lightspeed-stack:dev-latest
+# the lastest was broken, replace by the latest working image for now
+FROM quay.io/lightspeed-core/lightspeed-stack:dev-20250722-28abfaf
 
 USER 0
 
 # Re-declaring arguments without a value, inherits the global default one.
 ARG APP_ROOT
 ARG ANSIBLE_CHATBOT_VERSION
-RUN microdnf install -y --nodocs --setopt=keepcache=0 --setopt=tsflags=nodocs python3.11 jq
+RUN microdnf install -y --nodocs --setopt=keepcache=0 --setopt=tsflags=nodocs jq
 
 # PYTHONDONTWRITEBYTECODE 1 : disable the generation of .pyc
 # PYTHONUNBUFFERED 1 : force the stdout and stderr streams to be unbuffered
@@ -61,8 +63,6 @@ ENV LLAMA_STACK_CONFIG_DIR=/.llama/data
 # Data and configuration
 RUN mkdir -p /.llama/distributions/ansible-chatbot
 RUN mkdir -p /.llama/data/distributions/ansible-chatbot
-ADD lightspeed-stack.yaml /.llama/distributions/ansible-chatbot
-ADD ansible-chatbot-run.yaml /.llama/distributions/ansible-chatbot
 RUN echo -e "\
 {\n\
   \"version\": \"${ANSIBLE_CHATBOT_VERSION}\" \n\

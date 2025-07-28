@@ -95,10 +95,13 @@ Builds the image `ansible-chatbot-stack:$ANSIBLE_CHATBOT_VERSION`.
 ```commandline
 └── .llama/
     ├── distributions/
+    │   └── llama-stack/
+    │       └── config
+    │           └── ansible-chatbot-run.yaml
     │   └── ansible-chatbot/
-    │       ├── lightspeed-stack.yaml
-    │       ├── ansible-chatbot-run.yaml
-    │       ├── ansible-chatbot-version-info.json
+    │       ├── ansible-chatbot-version-info.json    
+    │       └── config
+    │           └── lightspeed-stack.yaml
     │       └── system-prompts/
     │           └── default.txt
     └── providers.d
