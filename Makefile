@@ -68,6 +68,10 @@ setup-vector-db:
 	docker cp rag-content:/rag/embeddings_model .
 	docker kill rag-content
 	gzip -d ./vector_db/aap_faiss_store.db.gz
+	# this permission changes will allow the container user 1001 to read/write the files
+	# in these directories
+	chmod -R o+rw ./vector_db/
+	chmod -R o+rw ./embeddings_model/
 
 # Pre-check required environment variables for build
 check-env-build:
@@ -76,9 +80,12 @@ check-env-build:
 		exit 1; \
 	fi
 
-build: check-env-build
+requirements:
+	uv export --no-hashes --no-header --no-annotate --no-dev --format requirements.txt > requirements.txt
+
+build: check-env-build requirements
 	@echo "Building customized Ansible Chatbot Stack image from lightspeed-core/lightspeed-stack..."
-	docker build --platform $(PLATFORM) -f ./Containerfile \
+	docker build --no-cache --platform $(PLATFORM) -f ./Containerfile \
 		--build-arg ANSIBLE_CHATBOT_VERSION=$(ANSIBLE_CHATBOT_VERSION) \
 		--build-arg LLAMA_STACK_RUN_CONFIG=$(LLAMA_STACK_RUN_CONFIG) \
 		-t ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION) .
