@@ -1,6 +1,8 @@
 #!/bin/bash
 MOUNTPATH=/.llama/data
 
+PYTHON_CMD="$@"
+
 echo "Checking preloaded embedding model..."
 if [[ -e /.llama/data/distributions/ansible-chatbot/embeddings_model ]]; then
   echo "/.llama/data/distributions/ansible-chatbot/embeddings_model already exists."
@@ -23,4 +25,4 @@ else
   fi
 fi
 
-python3.12 /app-root/src/lightspeed_stack.py --config /.llama/distributions/ansible-chatbot/config/lightspeed-stack.yaml
+${PYTHON_CMD} /app-root/src/lightspeed_stack.py --config /.llama/distributions/ansible-chatbot/config/lightspeed-stack.yaml
