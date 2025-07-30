@@ -7,9 +7,11 @@ anyio==4.9.0
 asyncpg==0.30.0
 attrs==25.3.0
 certifi==2025.6.15
+cffi==1.17.1 ; platform_python_implementation != 'PyPy'
 charset-normalizer==3.4.2
 click==8.2.1
 colorama==0.4.6 ; sys_platform == 'win32'
+cryptography==45.0.5
 distro==1.9.0
 ecdsa==0.19.1
 faiss-cpu==1.11.0
@@ -26,7 +28,7 @@ hf-xet==1.1.5 ; platform_machine == 'aarch64' or platform_machine == 'amd64' or 
 httpcore==1.0.9
 httpx==0.28.1
 httpx-sse==0.4.1
-huggingface-hub==0.33.0
+huggingface-hub==0.34.3
 idna==3.10
 importlib-metadata==8.7.0
 jinja2==3.1.6
@@ -34,9 +36,10 @@ jiter==0.10.0
 joblib==1.5.1
 jsonschema==4.24.0
 jsonschema-specifications==2025.4.1
-lightspeed-stack-providers==0.1.10
-llama-stack==0.2.14
-llama-stack-client==0.2.15
+lightspeed-stack-providers==0.1.12
+llama-api-client==0.1.2
+llama-stack==0.2.16
+llama-stack-client==0.2.16
 markdown-it-py==3.0.0
 markupsafe==3.0.2
 mcp==1.9.4
@@ -76,6 +79,7 @@ propcache==0.3.2
 protobuf==5.29.5
 pyaml==25.5.0
 pyasn1==0.6.1
+pycparser==2.22 ; platform_python_implementation != 'PyPy'
 pydantic==2.11.7
 pydantic-core==2.33.2
 pydantic-settings==2.10.1

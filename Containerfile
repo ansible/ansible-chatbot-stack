@@ -4,7 +4,7 @@ ARG ANSIBLE_CHATBOT_VERSION=latest
 # ======================================================
 # Transient image to construct Python venv
 # ------------------------------------------------------
-FROM quay.io/lightspeed-core/lightspeed-stack:dev-latest AS builder
+FROM quay.io/lightspeed-core/lightspeed-stack:0.1.2 AS builder
 
 ARG APP_ROOT=/app-root
 WORKDIR /app-root
