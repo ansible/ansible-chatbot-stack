@@ -23,9 +23,13 @@ spec:
   - name: revision
     value: '{{revision}}'
   - name: output-image
-    value: quay.io/redhat-user-workloads/ansible-lightspeed-tenant/ansible-chatbot-stack:{{revision}}
+    value: quay.io/ansible/ansible-chatbot-stack:{{revision}}
   - name: dockerfile
     value: Containerfile
+  - name: build-args
+    value:
+    - ANSIBLE_CHATBOT_VERSION=0.1.9
+    - LLAMA_STACK_RUN_CONFIG=ansible-chatbot-run.yaml
   pipelineSpec:
     description: |
       This pipeline is ideal for building container images from a Containerfile while maintaining trust after pipeline customization.
@@ -195,6 +199,34 @@ spec:
         workspace: git-auth
       - name: netrc
         workspace: netrc
+    - name: run-script
+      params:
+        - name: ociStorage
+          value: $(params.output-image).script
+        - name: ociArtifactExpiresAfter
+          value: $(params.image-expires-after)
+        - name: SCRIPT_RUNNER_IMAGE
+          value: registry.access.redhat.com/ubi9/ubi-minimal
+        - name: SCRIPT
+          value: |
+            #!/bin/sh
+            mkdir -p llama-stack/providers.d/inline/agents/
+            curl -o llama-stack/providers.d/inline/agents/lightspeed_inline_agent.yaml https://raw.githubusercontent.com/lightspeed-core/lightspeed-providers/refs/heads/main/resources/external_providers/inline/agents/lightspeed_inline_agent.yaml
+        - name: HERMETIC
+          value: $(params.hermetic)
+        - name: SOURCE_ARTIFACT
+          value: $(tasks.prefetch-dependencies.results.SOURCE_ARTIFACT)
+      runAfter:
+      - prefetch-dependencies
+      taskRef:
+        params:
+        - name: name
+          value: run-script-oci-ta
+        - name: bundle
+          value: quay.io/konflux-ci/tekton-catalog/task-run-script-oci-ta:0.1@sha256:c0f627069353ebd6d1ed03c8657e281eaf11be63706ea38cc53caf16cf4ffd65
+        - name: kind
+          value: task
+        resolver: bundles
     - name: build-container
       params:
       - name: IMAGE
@@ -219,11 +251,14 @@ spec:
       - name: PRIVILEGED_NESTED
         value: $(params.privileged-nested)
       - name: SOURCE_ARTIFACT
-        value: $(tasks.prefetch-dependencies.results.SOURCE_ARTIFACT)
+        value: $(tasks.run-script.results.SCRIPT_ARTIFACT)
+      - name: ADDITIONAL_BASE_IMAGES
+        value:
+        - $(tasks.run-script.results.SCRIPT_RUNNER_IMAGE_REFERENCE)
       - name: CACHI2_ARTIFACT
         value: $(tasks.prefetch-dependencies.results.CACHI2_ARTIFACT)
       runAfter:
-      - prefetch-dependencies
+      - run-script
       taskRef:
         params:
         - name: name
@@ -533,6 +568,10 @@ spec:
         value: $(tasks.build-image-index.results.IMAGE_URL)
       - name: IMAGE_DIGEST
         value: $(tasks.build-image-index.results.IMAGE_DIGEST)
+      - name: ADDITIONAL_TAGS
+        value:
+        - latest
+        - 0.9.$(tasks.git-metadata.results.commit-timestamp)
       runAfter:
       - build-image-index
       taskRef:
