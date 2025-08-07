@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.13'",
@@ -127,7 +127,7 @@ requires-dist = [
     { name = "aiosqlite", specifier = "~=0.21.0" },
     { name = "faiss-cpu", specifier = "~=1.11.0" },
     { name = "fire", specifier = "~=0.7.0" },
-    { name = "lightspeed-stack-providers", specifier = "==0.1.12" },
+    { name = "lightspeed-stack-providers", specifier = "==0.1.13" },
     { name = "mcp", specifier = "~=1.9.4" },
     { name = "numpy", specifier = "==2.2.6" },
     { name = "opentelemetry-api", specifier = "~=1.34.1" },
@@ -793,16 +793,16 @@ wheels = [
 
 [[package]]
 name = "lightspeed-stack-providers"
-version = "0.1.12"
+version = "0.1.13"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
     { name = "llama-stack" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/85/17/f532b6e1b371417c4f8f5e600542edfa79679b79fa51927371abb888bb0e/lightspeed_stack_providers-0.1.12.tar.gz", hash = "sha256:6f90e97e4a22213b54bfab6b49c297eb716bd63ac116353df392e1e5436ce9b2", size = 16780, upload-time = "2025-07-30T08:51:38.513Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/71/d0/5f960d6c8aa13fe78907491abdeb156457226f838abc27d5e76071ca293d/lightspeed_stack_providers-0.1.13.tar.gz", hash = "sha256:173ecd451b42d8dd00b637d635fca636f550394c8b60f39aa377bae720b67ccc", size = 16885, upload-time = "2025-08-07T12:33:10.752Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b3/3c/f01580d5085f241e974aa709cdbeb26c1de04712d05da3a85d3721fe6173/lightspeed_stack_providers-0.1.12-py3-none-any.whl", hash = "sha256:d8c5750ec0f2100c93792a2c0b8e24ddda88ee459fe090f1ad8edefd8e57e13e", size = 24616, upload-time = "2025-07-30T08:51:37.57Z" },
+    { url = "https://files.pythonhosted.org/packages/79/56/5459e0bab5057a52386e4a139bab2abdf3bff2cb7753a58cd1cd584cb1ea/lightspeed_stack_providers-0.1.13-py3-none-any.whl", hash = "sha256:16cdfa4d92c290038f191b49f20b73941100c81e2e969e844b0918dce8153ceb", size = 24722, upload-time = "2025-08-07T12:33:09.682Z" },
 ]
 
 [[package]]
