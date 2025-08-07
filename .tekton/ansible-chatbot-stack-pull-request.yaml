@@ -31,8 +31,8 @@ spec:
     value: Containerfile
   - name: build-args
     value:
-    - ANSIBLE_CHATBOT_VERSION=0.1.9
-    - LLAMA_STACK_RUN_CONFIG=ansible-chatbot-run.yaml
+    - ANSIBLE_CHATBOT_VERSION=0.9.$(tasks.git-metadata.results.commit-timestamp)
+    - GIT_COMMIT=$(tasks.clone-repository.results.commit)
   pipelineSpec:
     description: |
       This pipeline is ideal for building container images from a Containerfile while maintaining trust after pipeline customization.
@@ -176,18 +176,47 @@ spec:
       workspaces:
       - name: basic-auth
         workspace: git-auth
+    - name: git-metadata
+      params:
+        - name: ociStorage
+          value: $(params.output-image).script
+        - name: ociArtifactExpiresAfter
+          value: $(params.image-expires-after)
+        - name: SCRIPT_RUNNER_IMAGE
+          value: alpine/git
+        - name: SCRIPT
+          value: |
+            #!/bin/sh
+            set -euo pipefail
+            cd "$(workspaces.source.path)/source"
+            echo -n $(date -d @$(git log -1 --format=%at) "+%Y%m%d%H%M") > $(results.commit-timestamp.path)
+        - name: HERMETIC
+          value: $(params.hermetic)
+        - name: SOURCE_ARTIFACT
+          value: $(tasks.clone-repository.results.SOURCE_ARTIFACT)
+      runAfter:
+      - clone-repository
+      taskRef:
+        params:
+        - name: name
+          value: run-script-oci-ta
+        - name: bundle
+          value: quay.io/konflux-ci/tekton-catalog/task-run-script-oci-ta:0.1@sha256:c0f627069353ebd6d1ed03c8657e281eaf11be63706ea38cc53caf16cf4ffd65
+        - name: kind
+          value: task
+        resolver: bundles
     - name: prefetch-dependencies
       params:
       - name: input
         value: $(params.prefetch-input)
       - name: SOURCE_ARTIFACT
-        value: $(tasks.clone-repository.results.SOURCE_ARTIFACT)
+        value: $(tasks.git-metadata.results.SOURCE_ARTIFACT)
       - name: ociStorage
         value: $(params.output-image).prefetch
       - name: ociArtifactExpiresAfter
         value: $(params.image-expires-after)
       runAfter:
-      - clone-repository
+      - git-metadata
       taskRef:
         params:
         - name: name
@@ -202,7 +231,7 @@ spec:
         workspace: git-auth
       - name: netrc
         workspace: netrc
-    - name: run-script
+    - name: download-providers
       params:
         - name: ociStorage
           value: $(params.output-image).script
@@ -254,14 +283,14 @@ spec:
       - name: PRIVILEGED_NESTED
         value: $(params.privileged-nested)
       - name: SOURCE_ARTIFACT
-        value: $(tasks.run-script.results.SCRIPT_ARTIFACT)
+        value: $(tasks.download-providers.results.SCRIPT_ARTIFACT)
       - name: ADDITIONAL_BASE_IMAGES
         value:
-        - $(tasks.run-script.results.SCRIPT_RUNNER_IMAGE_REFERENCE)
+        - $(tasks.download-providers.results.SCRIPT_RUNNER_IMAGE_REFERENCE)
       - name: CACHI2_ARTIFACT
         value: $(tasks.prefetch-dependencies.results.CACHI2_ARTIFACT)
       runAfter:
-      - run-script
+      - download-providers
       taskRef:
         params:
         - name: name
