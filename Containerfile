@@ -1,5 +1,7 @@
 # Build arguments declared in the global scope.
 ARG ANSIBLE_CHATBOT_VERSION=latest
+ARG IMAGE_TAGS=image-tags-not-defined
+ARG GIT_COMMIT=git-commit-not-defined
 
 # ======================================================
 # Transient image to construct Python venv
@@ -34,6 +36,8 @@ USER 0
 # Re-declaring arguments without a value, inherits the global default one.
 ARG APP_ROOT
 ARG ANSIBLE_CHATBOT_VERSION
+ARG IMAGE_TAGS
+ARG GIT_COMMIT
 RUN microdnf install -y --nodocs --setopt=keepcache=0 --setopt=tsflags=nodocs jq
 
 # PYTHONDONTWRITEBYTECODE 1 : disable the generation of .pyc
@@ -58,7 +62,9 @@ RUN mkdir -p /.llama/distributions/ansible-chatbot
 RUN mkdir -p /.llama/data/distributions/ansible-chatbot
 RUN echo -e "\
 {\n\
-  \"version\": \"${ANSIBLE_CHATBOT_VERSION}\" \n\
+  \"version\": \"${ANSIBLE_CHATBOT_VERSION}\", \n\
+  \"imageTags\": \"${IMAGE_TAGS}\", \n\
+  \"gitCommit\": \"${GIT_COMMIT}\" \n\
 }\n\
 " > /.llama/distributions/ansible-chatbot/ansible-chatbot-version-info.json
 ADD llama-stack/providers.d /.llama/providers.d
