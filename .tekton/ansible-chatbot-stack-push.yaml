@@ -182,7 +182,7 @@ spec:
             #!/bin/sh
             set -euo pipefail
             cd "$(workspaces.source.path)/source"
-            echo -n $(date -d @$(git log -1 --format=%at) "+%Y%m%d%H%M") > $(results.commit-timestamp.path)
+            echo -n $(date -d @$(git log -1 --format=%at) "+%Y%m%d%H%M") > "${SCRIPT_OUTPUT}"
         - name: HERMETIC
           value: $(params.hermetic)
         - name: SOURCE_ARTIFACT
@@ -270,8 +270,8 @@ spec:
         value: $(tasks.clone-repository.results.commit)
       - name: BUILD_ARGS
         value:
-        - ANSIBLE_CHATBOT_VERSION=0.9.$(tasks.git-metadata.results.commit-timestamp)
-        - IMAGE_TAGS=latest 0.9.$(tasks.git-metadata.results.commit-timestamp)
+        - ANSIBLE_CHATBOT_VERSION=0.9.$(tasks.git-metadata.results.SCRIPT_OUTPUT)
+        - IMAGE_TAGS=latest 0.9.$(tasks.git-metadata.results.SCRIPT_OUTPUT)
         - GIT_COMMIT=$(tasks.clone-repository.results.commit)
       - name: BUILD_ARGS_FILE
         value: $(params.build-args-file)
@@ -598,7 +598,7 @@ spec:
       - name: ADDITIONAL_TAGS
         value:
         - latest
-        - 0.9.$(tasks.git-metadata.results.commit-timestamp)
+        - 0.9.$(tasks.git-metadata.results.SCRIPT_OUTPUT)
       runAfter:
       - build-image-index
       taskRef:
