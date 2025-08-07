@@ -184,7 +184,6 @@ spec:
           value: |
             #!/bin/sh
             set -euo pipefail
-            cd "$(workspaces.source.path)/source"
             echo -n $(date -d @$(git log -1 --format=%at) "+%Y%m%d%H%M") > "${SCRIPT_OUTPUT}"
         - name: HERMETIC
           value: $(params.hermetic)
