@@ -154,6 +154,20 @@ Runs basic tests against the local container.
     kubectl apply -f my-chatbot-stack-deploy.yaml
 ```
 
+## Appendix - Google Gemini
+
+* Please set the environment variable `OPENAI_API_KEY=<YOUR_API_KEY>`
+* Example of a `v1/query` request:
+```json
+{
+    "query": "hello",
+    "system_prompt": "You are a helpful assistant.",
+    "model": "gemini/gemini-2.5-flash",
+    "provider": "gemini"
+}
+```
+
+
 ## Appendix - Host clean-up
 
 If you have the need for re-building images, apply the following clean-ups right before:
