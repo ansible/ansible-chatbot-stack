@@ -127,7 +127,7 @@ requires-dist = [
     { name = "aiosqlite", specifier = "~=0.21.0" },
     { name = "faiss-cpu", specifier = "~=1.11.0" },
     { name = "fire", specifier = "~=0.7.0" },
-    { name = "lightspeed-stack-providers", specifier = "==0.1.13" },
+    { name = "lightspeed-stack-providers", specifier = "==0.1.14" },
     { name = "mcp", specifier = "~=1.9.4" },
     { name = "numpy", specifier = "==2.2.6" },
     { name = "opentelemetry-api", specifier = "~=1.34.1" },
@@ -793,16 +793,16 @@ wheels = [
 
 [[package]]
 name = "lightspeed-stack-providers"
-version = "0.1.13"
+version = "0.1.14"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
     { name = "llama-stack" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/71/d0/5f960d6c8aa13fe78907491abdeb156457226f838abc27d5e76071ca293d/lightspeed_stack_providers-0.1.13.tar.gz", hash = "sha256:173ecd451b42d8dd00b637d635fca636f550394c8b60f39aa377bae720b67ccc", size = 16885, upload-time = "2025-08-07T12:33:10.752Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a9/98/2dcf91439113e9c59e903bc457252f618b7dc7cc5656bbf312721572fc2c/lightspeed_stack_providers-0.1.14.tar.gz", hash = "sha256:6214f35b7f55604e3873ae8a907eae6eb15c044f6a800f7f9af43ace8a65e296", size = 19506, upload-time = "2025-08-13T09:07:55.11Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/79/56/5459e0bab5057a52386e4a139bab2abdf3bff2cb7753a58cd1cd584cb1ea/lightspeed_stack_providers-0.1.13-py3-none-any.whl", hash = "sha256:16cdfa4d92c290038f191b49f20b73941100c81e2e969e844b0918dce8153ceb", size = 24722, upload-time = "2025-08-07T12:33:09.682Z" },
+    { url = "https://files.pythonhosted.org/packages/0d/ae/d768eca3eaebe81ec63f4490ae485899008a0412270eb1b5ef469196d464/lightspeed_stack_providers-0.1.14-py3-none-any.whl", hash = "sha256:723037d571eb3fad082e680f82e176bb4d4f0cf47e0a865237849b3ef4c1ba2a", size = 25010, upload-time = "2025-08-13T09:07:54.264Z" },
 ]
 
 [[package]]
