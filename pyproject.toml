@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "aiosqlite~=0.21.0",
-    "faiss-cpu~=1.11.0",
+    "faiss-cpu~=1.11",
     "fire~=0.7.0",
     "lightspeed-stack-providers==0.1.14",
     "mcp~=1.9.4",
