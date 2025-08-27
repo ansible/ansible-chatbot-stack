@@ -20,8 +20,10 @@ NC := \033[0m # No Color
 # Choose between docker and podman based on what is available
 ifeq (, $(shell which podman))
 	CONTAINER_RUNTIME ?= docker
+	IMAGE_PREFIX ?=
 else
 	CONTAINER_RUNTIME ?= podman
+	IMAGE_PREFIX ?= localhost/
 endif
 
 
@@ -81,8 +83,8 @@ vector_db/aap_faiss_store.db:
 	gzip -d ./vector_db/aap_faiss_store.db.gz
 	# this permission changes will allow the container user 1001 to read/write the files
 	# in these directories
-	chmod -R o+rw ./vector_db/
-	chmod -R o+rw ./embeddings_model/
+	chmod -R og+rw ./vector_db/
+	chmod -R og+rw ./embeddings_model/
 
 # Pre-check required environment variables for build
 check-env-build:
@@ -136,7 +138,7 @@ run: check-env-run
 	  --env INFERENCE_MODEL=$(ANSIBLE_CHATBOT_INFERENCE_MODEL) \
 	  --env INFERENCE_MODEL_FILTER=$(ANSIBLE_CHATBOT_INFERENCE_MODEL_FILTER) \
 	  --env GEMINI_API_KEY=$(GEMINI_API_KEY) \
-	  ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION)
+	  $(IMAGE_PREFIX)ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION)
 
 run-test:
 	@echo "Running test query against lightspeed-core/lightspeed-stack's /config endpoint..."
@@ -175,7 +177,7 @@ run-local-db: check-env-run-local-db
 	  --env INFERENCE_MODEL=$(ANSIBLE_CHATBOT_INFERENCE_MODEL) \
 	  --env INFERENCE_MODEL_FILTER=$(ANSIBLE_CHATBOT_INFERENCE_MODEL_FILTER) \
 	  --env GEMINI_API_KEY=$(GEMINI_API_KEY) \
-	  ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION)
+	  $(IMAGE_PREFIX)ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION)
 
 clean:
 	@echo "Cleaning up..."
@@ -199,7 +201,7 @@ deploy-k8s:
 
 shell:
 	@echo "Getting a shell in the container..."
-	$(CONTAINER_RUNTIME) run --security-opt label=disable -it --entrypoint /bin/bash ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION)
+	$(CONTAINER_RUNTIME) run --security-opt label=disable -it --entrypoint /bin/bash $(IMAGE_PREFIX)ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION)
 
 # Pre-check required environment variables for tag-and-push
 check-env-tag-and-push:
