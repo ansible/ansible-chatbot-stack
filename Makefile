@@ -13,6 +13,7 @@ CONTAINER_DB_PATH ?= /.llama/data/distributions/ansible-chatbot
 RAG_CONTENT_IMAGE ?= quay.io/ansible/aap-rag-content:1.0.1753876830
 LIGHTSPEED_STACK_CONFIG ?= lightspeed-stack.yaml
 LLAMA_STACK_RUN_CONFIG ?= ansible-chatbot-run.yaml
+SYSTEM_PROMPT ?= ansible-chatbot-system-prompt.txt
 # Colors for terminal output
 RED := \033[0;31m
 NC := \033[0m # No Color
@@ -132,12 +133,15 @@ run: check-env-run
 	  -v ./vector_db/aap_faiss_store.db:$(CONTAINER_DB_PATH)/aap_faiss_store.db \
 	  -v ./$(LIGHTSPEED_STACK_CONFIG):/.llama/distributions/ansible-chatbot/config/lightspeed-stack.yaml \
 	  -v ./$(LLAMA_STACK_RUN_CONFIG):/.llama/distributions/llama-stack/config/ansible-chatbot-run.yaml \
-	  -v ./ansible-chatbot-system-prompt.txt:/.llama/distributions/ansible-chatbot/system-prompts/default.txt \
+	  -v ./$(SYSTEM_PROMPT):/.llama/distributions/ansible-chatbot/system-prompts/default.txt \
 	  --env VLLM_URL=$(ANSIBLE_CHATBOT_VLLM_URL) \
 	  --env VLLM_API_TOKEN=$(ANSIBLE_CHATBOT_VLLM_API_TOKEN) \
 	  --env INFERENCE_MODEL=$(ANSIBLE_CHATBOT_INFERENCE_MODEL) \
 	  --env INFERENCE_MODEL_FILTER=$(ANSIBLE_CHATBOT_INFERENCE_MODEL_FILTER) \
 	  --env GEMINI_API_KEY=$(GEMINI_API_KEY) \
+	  --env OPENAI_INFERENCE_MODEL=$(OPENAI_INFERENCE_MODEL) \
+	  --env OPENAI_API_KEY=$(OPENAI_API_KEY) \
+	  --env OPENAI_BASE_URL=$(OPENAI_BASE_URL) \
 	  $(IMAGE_PREFIX)ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION)
 
 run-test:
@@ -171,12 +175,15 @@ run-local-db: check-env-run-local-db
 	  -v ./vector_db/aap_faiss_store.db:$(CONTAINER_DB_PATH)/aap_faiss_store.db \
 	  -v ./$(LIGHTSPEED_STACK_CONFIG):/.llama/distributions/ansible-chatbot/config/lightspeed-stack.yaml \
 	  -v ./$(LLAMA_STACK_RUN_CONFIG):/.llama/distributions/llama-stack/config/ansible-chatbot-run.yaml \
-	  -v ./ansible-chatbot-system-prompt.txt:/.llama/distributions/ansible-chatbot/system-prompts/default.txt \
+	  -v ./$(SYSTEM_PROMPT):/.llama/distributions/ansible-chatbot/system-prompts/default.txt \
 	  --env VLLM_URL=$(ANSIBLE_CHATBOT_VLLM_URL) \
 	  --env VLLM_API_TOKEN=$(ANSIBLE_CHATBOT_VLLM_API_TOKEN) \
 	  --env INFERENCE_MODEL=$(ANSIBLE_CHATBOT_INFERENCE_MODEL) \
 	  --env INFERENCE_MODEL_FILTER=$(ANSIBLE_CHATBOT_INFERENCE_MODEL_FILTER) \
 	  --env GEMINI_API_KEY=$(GEMINI_API_KEY) \
+	  --env OPENAI_INFERENCE_MODEL=$(OPENAI_INFERENCE_MODEL) \
+	  --env OPENAI_API_KEY=$(OPENAI_API_KEY) \
+	  --env OPENAI_BASE_URL=$(OPENAI_BASE_URL) \
 	  $(IMAGE_PREFIX)ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION)
 
 clean:
