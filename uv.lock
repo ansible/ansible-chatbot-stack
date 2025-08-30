@@ -129,7 +129,7 @@ requires-dist = [
     { name = "faiss-cpu", specifier = "~=1.11.0" },
     { name = "fire", specifier = "~=0.7.0" },
     { name = "lightspeed-stack-providers", specifier = "==0.1.14" },
-    { name = "litellm", specifier = "~=1.75.3" },
+    { name = "litellm", specifier = "~=1.76.0" },
     { name = "mcp", specifier = "~=1.9.4" },
     { name = "numpy", specifier = "==2.2.6" },
     { name = "opentelemetry-api", specifier = "~=1.34.1" },
@@ -809,7 +809,7 @@ wheels = [
 
 [[package]]
 name = "litellm"
-version = "1.75.5.post1"
+version = "1.76.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -824,9 +824,9 @@ dependencies = [
     { name = "tiktoken" },
     { name = "tokenizers" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/10/97/6091a020895102a20f1da204ebe68c1293123555476b38e749f95ba5981c/litellm-1.75.5.post1.tar.gz", hash = "sha256:e40a0e4b25032755dc5df7f02742abe9e3b8836236363f605f3bdd363cb5a0d0", size = 10127846, upload-time = "2025-08-10T16:30:23.788Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c9/e8/47c791c3d2cb4397ddece90840aecfc6cdc4a003f039dde42d7c861f4709/litellm-1.76.0.tar.gz", hash = "sha256:d26d12333135edd72af60e0e310284dac3b079f4d7c47c79dfbb2430b9b4b421", size = 10170569, upload-time = "2025-08-24T05:14:01.176Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/8f/76/780f68a3b26227136a5147c76860aacedcae9bf1b7afc1c991ec9cad11bc/litellm-1.75.5.post1-py3-none-any.whl", hash = "sha256:1c72809a9c8f6e132ad06eb7e628f674c775b0ce6bfb58cbd37e8b585d929cb7", size = 8895997, upload-time = "2025-08-10T16:30:21.325Z" },
+    { url = "https://files.pythonhosted.org/packages/86/f2/891b4b6c09021046d7f5bcff57178b18f352a67b032d35cc693d79b38620/litellm-1.76.0-py3-none-any.whl", hash = "sha256:357464242fc1eeda384810c9e334e48ad67a50ecd30cf61e86c15f89e2f2e0b4", size = 8953112, upload-time = "2025-08-24T05:13:58.642Z" },
 ]
 
 [[package]]
