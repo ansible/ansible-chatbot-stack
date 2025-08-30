@@ -38,7 +38,7 @@ jsonschema==4.24.0
 jsonschema-specifications==2025.4.1
 lightspeed-stack-providers==0.1.14
 litellm==1.75.5.post1
-llama-api-client==0.1.2
+llama-api-client==0.3.0
 llama-stack==0.2.16
 llama-stack-client==0.2.16
 markdown-it-py==3.0.0
