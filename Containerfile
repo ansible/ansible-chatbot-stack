@@ -4,56 +4,37 @@ ARG IMAGE_TAGS=image-tags-not-defined
 ARG GIT_COMMIT=git-commit-not-defined
 
 # ======================================================
-# Transient image to construct Python venv
+# Base-image with all dependencies for Python venv
+# Lightspeed-stack bundles all required dependencies
+# For running llama-stack in library mode.
+#
+# To include more dependencies, create upstream PR
+# to update this file:
+# https://github.com/lightspeed-core/lightspeed-stack/blob/main/pyproject.toml
 # ------------------------------------------------------
-FROM quay.io/lightspeed-core/lightspeed-stack:0.1.3 AS builder
+FROM quay.io/lightspeed-core/lightspeed-stack:0.2.0
 
 ARG APP_ROOT=/app-root
 WORKDIR /app-root
 
-# UV_PYTHON_DOWNLOADS=0 : Disable Python interpreter downloads and use the system interpreter.
+# Add only project-specific dependencies without adding other dependencies
+# to not break the dependencies of the base image.
 ENV UV_COMPILE_BYTECODE=0 \
     UV_LINK_MODE=copy \
-    UV_PYTHON_DOWNLOADS=0
-
-# Install uv package manager
-RUN pip3.12 install uv
-
-# Add explicit files and directories
-# (avoid accidental inclusion of local directories or env files or credentials)
-COPY requirements.txt LICENSE.md README.md ./
-
-RUN uv pip install -r requirements.txt
-# ======================================================
-
-# ======================================================
-# Final image without uv package manager and based on lightspeed-stack base image
-# ------------------------------------------------------
-FROM registry.access.redhat.com/ubi9/python-312-minimal
+    UV_PYTHON_DOWNLOADS=0 \
+    UV_NO_CACHE=1
+RUN uv pip install . --no-deps && uv clean
 
 USER 0
 
-# Re-declaring arguments without a value, inherits the global default one.
-ARG APP_ROOT
-ARG ANSIBLE_CHATBOT_VERSION
-ARG IMAGE_TAGS
-ARG GIT_COMMIT
 RUN microdnf install -y --nodocs --setopt=keepcache=0 --setopt=tsflags=nodocs jq
 
-# PYTHONDONTWRITEBYTECODE 1 : disable the generation of .pyc
-# PYTHONUNBUFFERED 1 : force the stdout and stderr streams to be unbuffered
-# PYTHONCOERCECLOCALE 0, PYTHONUTF8 1 : skip legacy locales and use UTF-8 mode
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PYTHONCOERCECLOCALE=0 \
-    PYTHONUTF8=1 \
-    PYTHONIOENCODING=UTF-8 \
-    LANG=en_US.UTF-8
-
-COPY --from=builder --chown=1001:1001 /app-root /app-root
+# Add explicit files and directories
+# (avoid accidental inclusion of local directories or env files or credentials)
+COPY LICENSE.md README.md ./
 
 # this directory is checked by ecosystem-cert-preflight-checks task in Konflux
-COPY --from=builder /app-root/LICENSE.md /licenses/
+COPY LICENSE.md /licenses/
 
 ENV LLAMA_STACK_CONFIG_DIR=/.llama/data
 
