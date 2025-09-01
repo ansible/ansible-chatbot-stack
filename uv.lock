@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.13'",
@@ -126,9 +126,9 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiosqlite", specifier = "~=0.21.0" },
-    { name = "faiss-cpu", specifier = "~=1.11.0" },
+    { name = "faiss-cpu", specifier = "~=1.11" },
     { name = "fire", specifier = "~=0.7.0" },
-    { name = "lightspeed-stack-providers", specifier = "==0.1.14" },
+    { name = "lightspeed-stack-providers", specifier = "==0.1.15" },
     { name = "litellm", specifier = "~=1.75.3" },
     { name = "mcp", specifier = "~=1.9.4" },
     { name = "numpy", specifier = "==2.2.6" },
@@ -371,7 +371,6 @@ dependencies = [
     { name = "numpy" },
     { name = "packaging" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e7/9a/e33fc563f007924dd4ec3c5101fe5320298d6c13c158a24a9ed849058569/faiss_cpu-1.11.0.tar.gz", hash = "sha256:44877b896a2b30a61e35ea4970d008e8822545cb340eca4eff223ac7f40a1db9", size = 70218, upload-time = "2025-04-28T07:48:30.459Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/3b/d3/7178fa07047fd770964a83543329bb5e3fc1447004cfd85186ccf65ec3ee/faiss_cpu-1.11.0-cp312-cp312-macosx_14_0_arm64.whl", hash = "sha256:356437b9a46f98c25831cdae70ca484bd6c05065af6256d87f6505005e9135b9", size = 3313807, upload-time = "2025-04-28T07:47:54.533Z" },
     { url = "https://files.pythonhosted.org/packages/9e/71/25f5f7b70a9f22a3efe19e7288278da460b043a3b60ad98e4e47401ed5aa/faiss_cpu-1.11.0-cp312-cp312-macosx_14_0_x86_64.whl", hash = "sha256:c4a3d35993e614847f3221c6931529c0bac637a00eff0d55293e1db5cb98c85f", size = 7913537, upload-time = "2025-04-28T07:47:56.723Z" },
@@ -795,16 +794,16 @@ wheels = [
 
 [[package]]
 name = "lightspeed-stack-providers"
-version = "0.1.14"
+version = "0.1.15"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
     { name = "llama-stack" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a9/98/2dcf91439113e9c59e903bc457252f618b7dc7cc5656bbf312721572fc2c/lightspeed_stack_providers-0.1.14.tar.gz", hash = "sha256:6214f35b7f55604e3873ae8a907eae6eb15c044f6a800f7f9af43ace8a65e296", size = 19506, upload-time = "2025-08-13T09:07:55.11Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/53/ba/3822a083b897be05da4b7b56b927f40dc60f53544f0fa983d04ce91b39ff/lightspeed_stack_providers-0.1.15.tar.gz", hash = "sha256:c27ba08c14a9e3c3bd1492afdff4aef681dc0a2d7ac204f4585e5c206718ff4d", size = 19864, upload-time = "2025-09-01T14:11:43.246Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0d/ae/d768eca3eaebe81ec63f4490ae485899008a0412270eb1b5ef469196d464/lightspeed_stack_providers-0.1.14-py3-none-any.whl", hash = "sha256:723037d571eb3fad082e680f82e176bb4d4f0cf47e0a865237849b3ef4c1ba2a", size = 25010, upload-time = "2025-08-13T09:07:54.264Z" },
+    { url = "https://files.pythonhosted.org/packages/3c/71/8c344d05fe3c4d9488fbebe207b622cc7b82d3b38ca2492502884eaeaf1d/lightspeed_stack_providers-0.1.15-py3-none-any.whl", hash = "sha256:518c7bf94eda42c817c31fdf32a39dbedc753a600a22b2fa9487fe2f6211777c", size = 25476, upload-time = "2025-09-01T14:11:42.433Z" },
 ]
 
 [[package]]
