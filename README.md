@@ -140,6 +140,13 @@ Runs basic tests against the local container.
     make run-test
 ```
 
+## AAP quality evaluations
+
+AAP Chatbot Quality evaluations available:
+
+* [AAP documentation retrieval evaluation](https://github.com/ansible/ansible-wisdom-testing/blob/main/README.md#chatbot-evaluation-testing)
+* [AAP Inventory file generation evaluation](https://github.com/ansible-automation-platform/aap-installers-rag-content/tree/main/tools#usage)
+
 ## Deploy into a k8s cluster
 
 ### Change configuration in `kustomization.yaml` accordingly, then
@@ -154,15 +161,33 @@ Runs basic tests against the local container.
     kubectl apply -f my-chatbot-stack-deploy.yaml
 ```
 
-## Appendix - Google Gemini
+## Appendix - Google Gemini API
 
-* Please set the environment variable `OPENAI_API_KEY=<YOUR_API_KEY>`
+Using the [`gemini` remote inference provider](https://llama-stack.readthedocs.io/en/latest/providers/inference/remote_gemini.html):
+
+* Set the environment variable `OPENAI_API_KEY=<YOUR_API_KEY>`
 * Example of a `v1/query` request:
 ```json
 {
     "query": "hello",
     "system_prompt": "You are a helpful assistant.",
     "model": "gemini/gemini-2.5-flash",
+    "provider": "gemini"
+}
+```
+
+## Appendix - Google Vertex API
+
+Using the [`gemini` remote inference provider](https://llama-stack.readthedocs.io/en/latest/providers/inference/remote_gemini.html):
+
+* Set a dummy value for the environment variable `OPENAI_API_KEY` (so `gemini` provider within llama-stack, does not complain)
+* Set the path for your Google's Service Account credentials JSON file in the env `GOOGLE_APPLICATION_CREDENTIALS=<PATH_GOOGLE_CRED_JSON_FILE>`
+* Example of a `v1/query` request:
+```json
+{
+    "query": "hello",
+    "system_prompt": "You are a helpful assistant.",
+    "model": "gemini-2.5-flash",
     "provider": "gemini"
 }
 ```
