@@ -17,21 +17,26 @@ FROM quay.io/lightspeed-core/lightspeed-stack:0.2.0
 ARG APP_ROOT=/app-root
 WORKDIR /app-root
 
+# Add explicit files and directories
+# (avoid accidental inclusion of local directories or env files or credentials)
+COPY pyproject.toml LICENSE.md README.md ./
+
 # Add only project-specific dependencies without adding other dependencies
 # to not break the dependencies of the base image.
 ENV UV_COMPILE_BYTECODE=0 \
     UV_LINK_MODE=copy \
     UV_PYTHON_DOWNLOADS=0 \
     UV_NO_CACHE=1
+# Install top-level dependencies from pyproject.toml
+# List of dependencies is first parsed from pyproject.toml
+RUN python -c "import tomllib, sys; print(' '.join(tomllib.load(open('pyproject.toml','rb'))['project']['dependencies']))" \
+    | xargs uv pip install --no-deps
+# Install the project itself
 RUN uv pip install . --no-deps && uv clean
 
 USER 0
 
 RUN microdnf install -y --nodocs --setopt=keepcache=0 --setopt=tsflags=nodocs jq
-
-# Add explicit files and directories
-# (avoid accidental inclusion of local directories or env files or credentials)
-COPY LICENSE.md README.md ./
 
 # this directory is checked by ecosystem-cert-preflight-checks task in Konflux
 COPY LICENSE.md /licenses/
