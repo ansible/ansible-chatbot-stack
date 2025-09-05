@@ -235,3 +235,6 @@ all: setup build build-custom
 	@echo "All build steps completed successfully."
 	@printf "To run the container, use: $(RED)make run$(NC)\n"
 	@printf "To tag and push the container to quay.io, use: $(RED)make tag-and-push$(NC)\n"
+
+load-test:
+	uv run locust -f scripts/loading_test.py -t 120 --users 10 --spawn-rate 10 -H http://localhost:8321

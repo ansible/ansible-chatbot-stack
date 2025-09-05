@@ -22,4 +22,5 @@ dependencies = [
 dev = [
     "cachetools>=6.1.0",
     "kubernetes>=33.1.0",
+    "locust>=2.39.1",
 ]
