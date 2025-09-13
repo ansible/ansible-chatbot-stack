@@ -48,7 +48,7 @@ mdurl==0.1.2
 mpmath==1.3.0
 multidict==6.5.0
 networkx==3.5
-numpy==2.2.6
+numpy==2.3.3
 nvidia-cublas-cu12==12.6.4.1 ; platform_machine == 'x86_64' and sys_platform == 'linux'
 nvidia-cuda-cupti-cu12==12.6.80 ; platform_machine == 'x86_64' and sys_platform == 'linux'
 nvidia-cuda-nvrtc-cu12==12.6.77 ; platform_machine == 'x86_64' and sys_platform == 'linux'
