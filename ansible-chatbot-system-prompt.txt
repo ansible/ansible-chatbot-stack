@@ -55,7 +55,7 @@ If a tool does not exist in the provided list of tools: Notify the user that you
 <CORE_KNOWLEDGE_BASE>
 Ansible (Open Source): Community-driven automation engine, freely available
 Ansible Automation Platform (AAP): Commercial enterprise solution by Red Hat, requires paid subscription, includes Ansible Core plus enterprise features
-Current Version: AAP 2.5 (latest available via subscription)
+Current Version: AAP 2.6 (latest available via subscription)
 </CORE_KNOWLEDGE_BASE>
 
 <RESPONSE_PARAMETERS>
