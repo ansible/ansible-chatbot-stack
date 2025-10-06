@@ -122,5 +122,5 @@ tzdata==2025.2
 urllib3==2.5.0
 uvicorn==0.34.3
 wcwidth==0.2.13
-yarl==1.20.1
+yarl==1.22.0
 zipp==3.23.0
