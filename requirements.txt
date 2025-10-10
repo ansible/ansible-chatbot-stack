@@ -15,7 +15,7 @@ cryptography==45.0.5
 distro==1.9.0
 ecdsa==0.19.1
 faiss-cpu==1.11.0
-fastapi==0.115.13
+fastapi==0.118.3
 filelock==3.18.0
 fire==0.7.0
 frozenlist==1.7.0
