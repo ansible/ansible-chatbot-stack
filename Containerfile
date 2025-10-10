@@ -6,7 +6,7 @@ ARG GIT_COMMIT=git-commit-not-defined
 # ======================================================
 # Transient image to construct Python venv
 # ------------------------------------------------------
-FROM quay.io/lightspeed-core/lightspeed-stack:0.1.3 AS builder
+FROM quay.io/lightspeed-core/lightspeed-stack:0.3.0 AS builder
 
 ARG APP_ROOT=/app-root
 WORKDIR /app-root
@@ -23,6 +23,9 @@ RUN pip3.12 install uv
 # (avoid accidental inclusion of local directories or env files or credentials)
 COPY requirements.txt LICENSE.md README.md ./
 
+# This is a temp just for testing purpose
+USER 0
+RUN microdnf install -y --nodocs git
 RUN uv pip install -r requirements.txt
 # ======================================================
 
