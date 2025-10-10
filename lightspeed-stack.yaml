@@ -9,8 +9,6 @@ service:
 llama_stack:
   use_as_library_client: true
   library_client_config_path: /.llama/distributions/llama-stack/config/ansible-chatbot-run.yaml
-user_data_collection:
-  feedback_disabled: true
-  transcripts_disabled: true
+user_data_collection: {}
 customization:
   system_prompt_path: /.llama/distributions/ansible-chatbot/system-prompts/default.txt
