@@ -13,6 +13,7 @@ click==8.2.1
 colorama==0.4.6 ; sys_platform == 'win32'
 cryptography==45.0.5
 distro==1.9.0
+dumb-init==1.2.5.post1
 ecdsa==0.19.1
 faiss-cpu==1.11.0
 fastapi==0.115.13
