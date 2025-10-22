@@ -77,7 +77,7 @@ packaging==25.0
 pandas==2.3.0
 pillow==11.2.1
 prompt-toolkit==3.0.51
-propcache==0.3.2
+propcache==0.4.1
 protobuf==5.29.5
 pyaml==25.5.0
 pyasn1==0.6.1
