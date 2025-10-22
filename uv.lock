@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.13'",
@@ -105,6 +105,7 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "aiosqlite" },
+    { name = "dumb-init" },
     { name = "faiss-cpu" },
     { name = "fire" },
     { name = "lightspeed-stack-providers" },
@@ -127,6 +128,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiosqlite", specifier = "~=0.21.0" },
+    { name = "dumb-init", specifier = ">=1.2.5.post1" },
     { name = "faiss-cpu", specifier = "~=1.11" },
     { name = "fire", specifier = "~=0.7.0" },
     { name = "lightspeed-stack-providers", specifier = "==0.1.15" },
@@ -407,6 +409,18 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/fc/f8/98eea607f65de6527f8a2e8885fc8015d3e6f5775df186e443e0964a11c3/distro-1.9.0.tar.gz", hash = "sha256:2fa77c6fd8940f116ee1d6b94a2f90b13b5ea8d019b98bc8bafdcabcdd9bdbed", size = 60722, upload-time = "2023-12-24T09:54:32.31Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/12/b3/231ffd4ab1fc9d679809f356cebee130ac7daa00d6d6f3206dd4fd137e9e/distro-1.9.0-py3-none-any.whl", hash = "sha256:7bffd925d65168f85027d8da9af6bddab658135b840670a223589bc0c8ef02b2", size = 20277, upload-time = "2023-12-24T09:54:30.421Z" },
+]
+
+[[package]]
+name = "dumb-init"
+version = "1.2.5.post1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/3d/a6/73c6e478115f98f5778e8b7808dc59d0985eae178b4c38da72968887a13e/dumb-init-1.2.5.post1.tar.gz", hash = "sha256:6510538a975e0de10658b0210ec2ad62dc3617543af5c6fbd29a3af111eae981", size = 11531, upload-time = "2022-04-26T17:47:50.804Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/80/9f/04e2f23d636acdabcb62c623467f37ec672ee77d301fa2e98d6abb0dc763/dumb_init-1.2.5.post1-py2.py3-none-manylinux_2_12_x86_64.manylinux2010_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:5d6b1fe9b8efcdbbdcb670efe7a55f9117251ee9648d35ffd0c487fd79515ea5", size = 9054, upload-time = "2022-04-26T17:47:45.644Z" },
+    { url = "https://files.pythonhosted.org/packages/0f/24/394fa0bdd8a60561f5d12b6d6cdd56b1190e393a1d50d38cf3500a894ee9/dumb_init-1.2.5.post1-py2.py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:a516a16a7dfed012de2524eb449e31f7f583b11b938eebb3ec09fd194497293d", size = 9412, upload-time = "2022-04-26T17:47:47.212Z" },
+    { url = "https://files.pythonhosted.org/packages/3c/e2/936957a2b00576e22af0cc7ddf62f72b3c7045abf3a324fc582287555480/dumb_init-1.2.5.post1-py2.py3-none-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:c52a20fe73a6f56501079f969775098ab83bd9c73648b9e4eb68fa1b02a9b98e", size = 9659, upload-time = "2022-04-26T17:47:48.709Z" },
+    { url = "https://files.pythonhosted.org/packages/eb/84/01b94dbf7bef8fb154c7512ba4ebfdb022938528dd743bf2c9384d4088ef/dumb_init-1.2.5.post1-py2.py3-none-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:fc1e309f52c898ee00df056189f46ca3f6055a72b77015f4eefbd7c58c45290f", size = 9331, upload-time = "2022-04-26T17:47:49.727Z" },
 ]
 
 [[package]]

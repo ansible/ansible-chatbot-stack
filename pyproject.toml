@@ -16,6 +16,7 @@ dependencies = [
     "sentence-transformers>=5.0.0",
     "sqlalchemy~=2.0.41",
     "litellm~=1.75.3",
+    "dumb-init>=1.2.5.post1",
 ]
 
 [dependency-groups]

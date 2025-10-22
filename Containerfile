@@ -84,5 +84,6 @@ USER 1001
 ENV PATH="/app-root/.venv/bin:$PATH"
 LABEL vendor="Red Hat, Inc."
 
+ENTRYPOINT ["/app-root/.venv/bin/dumb-init", "--"]
 CMD ["/.llama/entrypoint.sh", "/app-root/.venv/bin/python3.12"]
 # ======================================================
