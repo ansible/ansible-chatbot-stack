@@ -9,7 +9,7 @@ dependencies = [
     "faiss-cpu~=1.11",
     "fire~=0.7.0",
     "lightspeed-stack-providers==0.1.15",
-    "mcp~=1.9.4",
+    "mcp~=1.19.0",
     "numpy==2.2.6",
     "opentelemetry-api~=1.34.1",
     "opentelemetry-exporter-otlp~=1.34.1",
