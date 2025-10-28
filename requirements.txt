@@ -86,7 +86,7 @@ pydantic-core==2.41.1
 pydantic-settings==2.10.1
 pygments==2.19.2
 python-dateutil==2.9.0.post0
-python-dotenv==1.1.1
+python-dotenv==1.2.1
 python-jose==3.5.0
 python-multipart==0.0.20
 pytz==2025.2
