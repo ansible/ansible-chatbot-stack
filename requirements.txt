@@ -76,7 +76,7 @@ pillow==11.2.1
 prompt-toolkit==3.0.51
 propcache==0.3.2
 protobuf==5.29.5
-pyaml==25.5.0
+pyaml==25.7.0
 pyasn1==0.6.1
 pycparser==2.22 ; platform_python_implementation != 'PyPy'
 pydantic==2.12.0
