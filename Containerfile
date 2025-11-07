@@ -1,4 +1,3 @@
-# Build arguments declared in the global scope.
 ARG ANSIBLE_CHATBOT_VERSION=latest
 ARG IMAGE_TAGS=image-tags-not-defined
 ARG GIT_COMMIT=git-commit-not-defined
