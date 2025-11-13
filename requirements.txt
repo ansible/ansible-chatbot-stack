@@ -13,16 +13,17 @@ click==8.2.1
 colorama==0.4.6 ; sys_platform == 'win32'
 cryptography==45.0.5
 distro==1.9.0
+dumb-init==1.2.5.post1
 ecdsa==0.19.1
 faiss-cpu==1.11.0
 fastapi==0.115.13
+fastuuid==0.14.0
 filelock==3.18.0
 fire==0.7.0
 frozenlist==1.7.0
 fsspec==2025.5.1
 googleapis-common-protos==1.70.0
 greenlet==3.2.3 ; (python_full_version < '3.14' and platform_machine == 'AMD64') or (python_full_version < '3.14' and platform_machine == 'WIN32') or (python_full_version < '3.14' and platform_machine == 'aarch64') or (python_full_version < '3.14' and platform_machine == 'amd64') or (python_full_version < '3.14' and platform_machine == 'ppc64le') or (python_full_version < '3.14' and platform_machine == 'win32') or (python_full_version < '3.14' and platform_machine == 'x86_64')
-grpcio==1.73.0
 h11==0.16.0
 hf-xet==1.1.5 ; platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'arm64' or platform_machine == 'x86_64'
 httpcore==1.0.9
@@ -36,11 +37,10 @@ jiter==0.10.0
 joblib==1.5.1
 jsonschema==4.24.0
 jsonschema-specifications==2025.4.1
-lightspeed-stack-providers==0.1.15
-litellm==1.75.5.post1
-llama-api-client==0.1.2
-llama-stack==0.2.16
-llama-stack-client==0.2.16
+lightspeed-stack-providers==0.1.17
+litellm==1.79.1
+llama-stack==0.2.22
+llama-stack-client==0.2.22
 markdown-it-py==3.0.0
 markupsafe==3.0.2
 mcp==1.9.4
@@ -63,11 +63,9 @@ nvidia-cusparselt-cu12==0.6.3 ; platform_machine == 'x86_64' and sys_platform ==
 nvidia-nccl-cu12==2.26.2 ; platform_machine == 'x86_64' and sys_platform == 'linux'
 nvidia-nvjitlink-cu12==12.6.85 ; platform_machine == 'x86_64' and sys_platform == 'linux'
 nvidia-nvtx-cu12==12.6.77 ; platform_machine == 'x86_64' and sys_platform == 'linux'
-openai==1.99.9
+openai==2.3.0
 opentelemetry-api==1.34.1
-opentelemetry-exporter-otlp==1.34.1
 opentelemetry-exporter-otlp-proto-common==1.34.1
-opentelemetry-exporter-otlp-proto-grpc==1.34.1
 opentelemetry-exporter-otlp-proto-http==1.34.1
 opentelemetry-proto==1.34.1
 opentelemetry-sdk==1.34.1
@@ -81,8 +79,8 @@ protobuf==5.29.5
 pyaml==25.5.0
 pyasn1==0.6.1
 pycparser==2.22 ; platform_python_implementation != 'PyPy'
-pydantic==2.11.7
-pydantic-core==2.33.2
+pydantic==2.12.0
+pydantic-core==2.41.1
 pydantic-settings==2.10.1
 pygments==2.19.2
 python-dateutil==2.9.0.post0
@@ -116,8 +114,8 @@ torch==2.7.1
 tqdm==4.67.1
 transformers==4.53.1
 triton==3.3.1 ; platform_machine == 'x86_64' and sys_platform == 'linux'
-typing-extensions==4.14.0
-typing-inspection==0.4.1
+typing-extensions==4.15.0
+typing-inspection==0.4.2
 tzdata==2025.2
 urllib3==2.5.0
 uvicorn==0.34.3

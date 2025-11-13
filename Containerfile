@@ -6,7 +6,7 @@ ARG GIT_COMMIT=git-commit-not-defined
 # ======================================================
 # Transient image to construct Python venv
 # ------------------------------------------------------
-FROM quay.io/lightspeed-core/lightspeed-stack:0.1.3 AS builder
+FROM quay.io/lightspeed-core/lightspeed-stack:0.3.0 AS builder
 
 ARG APP_ROOT=/app-root
 WORKDIR /app-root
@@ -84,5 +84,6 @@ USER 1001
 ENV PATH="/app-root/.venv/bin:$PATH"
 LABEL vendor="Red Hat, Inc."
 
+ENTRYPOINT ["/app-root/.venv/bin/dumb-init", "--"]
 CMD ["/.llama/entrypoint.sh", "/app-root/.venv/bin/python3.12"]
 # ======================================================

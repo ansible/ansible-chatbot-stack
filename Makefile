@@ -10,10 +10,12 @@ ANSIBLE_CHATBOT_INFERENCE_MODEL_FILTER ?=
 LLAMA_STACK_PORT ?= 8321
 LOCAL_DB_PATH ?= .
 CONTAINER_DB_PATH ?= /.llama/data/distributions/ansible-chatbot
-RAG_CONTENT_IMAGE ?= quay.io/ansible/aap-rag-content:1.0.1759978317
+RAG_CONTENT_IMAGE ?= quay.io/ansible/aap-rag-content:1.0.1762529060
 LIGHTSPEED_STACK_CONFIG ?= lightspeed-stack.yaml
 LLAMA_STACK_RUN_CONFIG ?= ansible-chatbot-run.yaml
 SYSTEM_PROMPT ?= ansible-chatbot-system-prompt.txt
+PROVIDER_VECTOR_DB_ID_FILE ?= "./vector_db/provider_vector_db_id.ind"
+PROVIDER_VECTOR_DB_ID ?= $(shell [ -f $(PROVIDER_VECTOR_DB_ID_FILE) ] && cat $(PROVIDER_VECTOR_DB_ID_FILE))
 # Colors for terminal output
 RED := \033[0;31m
 NC := \033[0m # No Color
@@ -79,6 +81,7 @@ vector_db/aap_faiss_store.db:
 	mkdir -p ./vector_db
 	$(CONTAINER_RUNTIME) run --platform $(PLATFORM) -d --rm --name rag-content $(RAG_CONTENT_IMAGE) sleep infinity
 	$(CONTAINER_RUNTIME) cp rag-content:/rag/llama_stack_vector_db/faiss_store.db.gz ./vector_db/aap_faiss_store.db.gz
+	$(CONTAINER_RUNTIME) cp rag-content:/rag/llama_stack_vector_db/provider_vector_db_id.ind ./vector_db/provider_vector_db_id.ind
 	$(CONTAINER_RUNTIME) cp rag-content:/rag/embeddings_model .
 	$(CONTAINER_RUNTIME) kill rag-content
 	gzip -d ./vector_db/aap_faiss_store.db.gz
@@ -123,6 +126,11 @@ check-env-run:
 		printf "$(RED)Error: ANSIBLE_CHATBOT_VERSION is required but not set$(NC)\n"; \
 		exit 1; \
 	fi
+	@if [ -z "$(PROVIDER_VECTOR_DB_ID)" ]; then \
+		printf "$(RED)Error: PROVIDER_VECTOR_DB_ID is required but not set$(NC)\n"; \
+		printf "Run 'make setup' to generate $(PROVIDER_VECTOR_DB_ID_FILE) or set PROVIDER_VECTOR_DB_ID manually.\n"; \
+		exit 1; \
+	fi
 
 run: check-env-run
 	@echo "Running Ansible Chatbot Stack container..."
@@ -142,6 +150,7 @@ run: check-env-run
 	  --env OPENAI_INFERENCE_MODEL=$(OPENAI_INFERENCE_MODEL) \
 	  --env OPENAI_API_KEY=$(OPENAI_API_KEY) \
 	  --env OPENAI_BASE_URL=$(OPENAI_BASE_URL) \
+	  --env PROVIDER_VECTOR_DB_ID=$(PROVIDER_VECTOR_DB_ID) \
 	  $(IMAGE_PREFIX)ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION)
 
 run-test:
@@ -184,12 +193,15 @@ run-local-db: check-env-run-local-db
 	  --env OPENAI_INFERENCE_MODEL=$(OPENAI_INFERENCE_MODEL) \
 	  --env OPENAI_API_KEY=$(OPENAI_API_KEY) \
 	  --env OPENAI_BASE_URL=$(OPENAI_BASE_URL) \
+	  --env PROVIDER_VECTOR_DB_ID=$(PROVIDER_VECTOR_DB_ID) \
 	  $(IMAGE_PREFIX)ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION)
 
 clean:
 	@echo "Cleaning up..."
 	@echo "Cleaning up your local folders..."
 	rm -rf llama-stack/
+	rm -rf embeddings_model/
+	rm -rf vector_db/
 	rm -rf providers.d/
 	rm -rf work/
 	rm -f requirements.txt
