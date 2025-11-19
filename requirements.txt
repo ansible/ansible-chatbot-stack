@@ -73,7 +73,7 @@ opentelemetry-sdk==1.34.1
 opentelemetry-semantic-conventions==0.55b1
 packaging==25.0
 pandas==2.3.0
-pillow==11.2.1
+pillow==12.0.0
 prompt-toolkit==3.0.51
 propcache==0.3.2
 protobuf==5.29.5
