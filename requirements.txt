@@ -72,7 +72,7 @@ opentelemetry-proto==1.34.1
 opentelemetry-sdk==1.34.1
 opentelemetry-semantic-conventions==0.55b1
 packaging==25.0
-pandas==2.3.0
+pandas==2.3.3
 pillow==11.2.1
 prompt-toolkit==3.0.51
 propcache==0.3.2
