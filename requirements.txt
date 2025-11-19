@@ -20,7 +20,7 @@ faiss-cpu==1.11.0
 fastapi==0.121.2
 fastuuid==0.14.0
 filelock==3.18.0
-fire==0.7.0
+fire==0.7.1
 frozenlist==1.7.0
 fsspec==2025.5.1
 googleapis-common-protos==1.70.0
