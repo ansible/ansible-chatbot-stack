@@ -14,6 +14,10 @@ user_data_collection:
   transcripts_enabled: false
 customization:
   system_prompt_path: /.llama/distributions/ansible-chatbot/system-prompts/default.txt
+#authentication:
+#  module: "api-key-token"
+#  api_key_config:
+#    api_key: ${env.CHATBOT_API_TOKEN}
 mcp_servers:
 - name: mcp::aap-controller
   provider_id: model-context-protocol

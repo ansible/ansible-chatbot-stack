@@ -14,3 +14,7 @@ user_data_collection:
   transcripts_enabled: false
 customization:
   system_prompt_path: ./ansible-chatbot-system-prompt.txt
+#authentication:
+#  module: "api-key-token"
+#  api_key_config:
+#    api_key: ${env.CHATBOT_API_TOKEN}
