@@ -16,6 +16,7 @@ LLAMA_STACK_RUN_CONFIG ?= ansible-chatbot-run.yaml
 SYSTEM_PROMPT ?= ansible-chatbot-system-prompt.txt
 PROVIDER_VECTOR_DB_ID_FILE ?= "./vector_db/provider_vector_db_id.ind"
 PROVIDER_VECTOR_DB_ID ?= $(shell [ -f $(PROVIDER_VECTOR_DB_ID_FILE) ] && cat $(PROVIDER_VECTOR_DB_ID_FILE))
+CHATBOT_API_TOKEN ?=
 # Colors for terminal output
 RED := \033[0;31m
 NC := \033[0m # No Color
@@ -151,6 +152,7 @@ run: check-env-run
 	  --env OPENAI_API_KEY=$(OPENAI_API_KEY) \
 	  --env OPENAI_BASE_URL=$(OPENAI_BASE_URL) \
 	  --env PROVIDER_VECTOR_DB_ID=$(PROVIDER_VECTOR_DB_ID) \
+	  --env CHATBOT_API_TOKEN=$(CHATBOT_API_TOKEN) \
 	  $(IMAGE_PREFIX)ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION)
 
 run-test:
@@ -194,6 +196,7 @@ run-local-db: check-env-run-local-db
 	  --env OPENAI_API_KEY=$(OPENAI_API_KEY) \
 	  --env OPENAI_BASE_URL=$(OPENAI_BASE_URL) \
 	  --env PROVIDER_VECTOR_DB_ID=$(PROVIDER_VECTOR_DB_ID) \
+	  --env CHATBOT_API_TOKEN=$(CHATBOT_API_TOKEN) \
 	  $(IMAGE_PREFIX)ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION)
 
 clean:
