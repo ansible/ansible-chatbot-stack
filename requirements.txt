@@ -16,7 +16,7 @@ cryptography==45.0.5
 distro==1.9.0
 dumb-init==1.2.5.post1
 ecdsa==0.19.1
-faiss-cpu==1.11.0
+faiss-cpu==1.13.1
 fastapi==0.121.2
 fastuuid==0.14.0
 filelock==3.18.0
