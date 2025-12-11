@@ -65,11 +65,11 @@ nvidia-nccl-cu12==2.26.2 ; platform_machine == 'x86_64' and sys_platform == 'lin
 nvidia-nvjitlink-cu12==12.6.85 ; platform_machine == 'x86_64' and sys_platform == 'linux'
 nvidia-nvtx-cu12==12.6.77 ; platform_machine == 'x86_64' and sys_platform == 'linux'
 openai==2.3.0
-opentelemetry-api==1.34.1
-opentelemetry-exporter-otlp-proto-common==1.34.1
-opentelemetry-exporter-otlp-proto-http==1.34.1
-opentelemetry-proto==1.34.1
-opentelemetry-sdk==1.34.1
+opentelemetry-api==1.39.1
+opentelemetry-exporter-otlp-proto-common==1.39.1
+opentelemetry-exporter-otlp-proto-http==1.39.1
+opentelemetry-proto==1.39.1
+opentelemetry-sdk==1.39.1
 opentelemetry-semantic-conventions==0.55b1
 packaging==25.0
 pandas==2.3.0
