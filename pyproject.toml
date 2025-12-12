@@ -7,7 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "faiss-cpu~=1.11",
     "lightspeed-stack-providers==0.1.17",
-    "mcp~=1.9.4",
+    "mcp~=1.24.0",
     "sentence-transformers>=5.0.0",
     "dumb-init>=1.2.5.post1",
     "litellm>=1.79.0",
