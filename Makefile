@@ -98,7 +98,7 @@ check-env-build:
 		exit 1; \
 	fi
 
-requirements.txt:
+requirements.txt: uv.lock
 	uv export --no-hashes --no-header --no-annotate --no-dev --format requirements.txt > requirements.txt
 
 build: check-env-build setup requirements.txt
