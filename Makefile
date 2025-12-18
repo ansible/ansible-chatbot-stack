@@ -32,7 +32,7 @@ endif
 
 
 
-.PHONY: help setup build build-custom run clean all deploy-k8s shell tag-and-push
+.PHONY: help setup setup-test build build-custom run clean all deploy-k8s shell tag-and-push test
 
 .EXPORT_ALL_VARIABLES:
 
@@ -46,6 +46,7 @@ help:
 	@echo "  help              - Show this help message"
 	@echo "  all               - Run all steps (setup, build, build-custom)"
 	@echo "  setup             - Sets up llama-stack and the external lightspeed providers"
+	@echo "  setup-test        - Sets up test environment with dummy data (no Quay credentials needed)"
 	@echo "  setup-vector-db   - Sets up vector DB and embedding model"
 	@echo "  build             - Build the customized Ansible Chatbot Stack image from lightspeed-core/lightspeed-stack"
 	@echo "  run               - Run the Ansible Chatbot Stack container built with 'build-lsc'"
@@ -55,6 +56,9 @@ help:
 	@echo "  deploy-k8s        - Deploy to Kubernetes cluster"
 	@echo "  shell             - Get a shell in the container"
 	@echo "  tag-and-push      - Tag and push the container image to quay.io"
+	@echo ""
+	@echo "Test targets:"
+	@echo "  test              - Run all tests (uses mock OpenAI server)"
 	@echo ""
 	@echo "Required Environment variables:"
 	@echo "  ANSIBLE_CHATBOT_VERSION                - Version tag for the image (default: $(ANSIBLE_CHATBOT_VERSION))"
@@ -74,6 +78,12 @@ llama-stack/providers.d/inline/agents/lightspeed_inline_agent.yaml:
 	mkdir -p llama-stack/providers.d/inline/agents/
 	curl -o llama-stack/providers.d/inline/agents/lightspeed_inline_agent.yaml https://raw.githubusercontent.com/lightspeed-core/lightspeed-providers/refs/heads/main/resources/external_providers/inline/agents/lightspeed_inline_agent.yaml
 	@echo "Environment setup complete."
+
+setup-test: llama-stack/providers.d/inline/agents/lightspeed_inline_agent.yaml
+	@echo "Setting up test environment (dummy data)..."
+	uv sync --group test
+	uv run python tests/setup_test_data.py
+	@echo "Test environment setup complete."
 
 setup-vector-db: vector_db/aap_faiss_store.db
 vector_db/aap_faiss_store.db:
@@ -250,3 +260,7 @@ all: setup build build-custom
 
 load-test:
 	uv run locust -f scripts/loading_test.py -t 120 --users 10 --spawn-rate 10 -H http://localhost:8321
+
+test:
+	@echo "Running all tests (mock OpenAI server)..."
+	uv run --group test pytest tests/ -v
