@@ -1,0 +1,114 @@
+version: '2'
+image_name: ansible-chatbot-test
+container_image: ansible-chatbot-test
+apis:
+- inference
+- vector_io
+- safety
+- agents
+- datasetio
+- telemetry
+- tool_runtime
+- files
+providers:
+  inference:
+  - provider_id: openai
+    provider_type: remote::openai
+    config:
+      api_key: ${env.OPENAI_API_KEY:=fake-test-key}
+      base_url: ${env.OPENAI_BASE_URL:=https://api.openai.com/v1}
+  - provider_id: inline_sentence-transformer
+    provider_type: inline::sentence-transformers
+    config: {}
+  vector_io:
+  - provider_id: aap_faiss
+    provider_type: inline::faiss
+    config:
+      kvstore:
+        type: sqlite
+        namespace: null
+        db_path: ${env.VECTOR_DB_DIR:=./vector_db}/aap_faiss_store.db
+  safety:
+  - provider_id: llama-guard
+    provider_type: inline::llama-guard
+    config:
+      excluded_categories: []
+  agents:
+  - provider_id: lightspeed_inline_agent
+    provider_type: inline::lightspeed_inline_agent
+    config:
+      persistence_store:
+        type: sqlite
+        namespace: null
+        db_path: ${env.PROVIDERS_DB_DIR:=./test_data}/agents_store.db
+      responses_store:
+        type: sqlite
+        namespace: null
+        db_path: ${env.PROVIDERS_DB_DIR:=./test_data}/responses_store.db
+      tools_filter:
+        enabled: false
+  datasetio:
+  - provider_id: localfs
+    provider_type: inline::localfs
+    config:
+      kvstore:
+        type: sqlite
+        namespace: null
+        db_path: ${env.PROVIDERS_DB_DIR:=./test_data}/localfs_datasetio.db
+  files:
+  - provider_id: localfs
+    provider_type: inline::localfs
+    config:
+      storage_dir: ${env.PROVIDERS_DB_DIR:=./test_data}/files
+      metadata_store:
+        type: sqlite
+        namespace: null
+        db_path: ${env.PROVIDERS_DB_DIR:=./test_data}/files_store.db
+  telemetry:
+  - provider_id: meta-reference
+    provider_type: inline::meta-reference
+    config:
+      service_name: ${env.OTEL_SERVICE_NAME:=ansible-chatbot-stack-test}
+      sinks: ${env.TELEMETRY_SINKS:=console}
+  tool_runtime:
+  - provider_id: rag-runtime
+    provider_type: inline::rag-runtime
+    config: {}
+metadata_store:
+  namespace: null
+  type: sqlite
+  db_path: ${env.PROVIDERS_DB_DIR:=./test_data}/registry.db
+models:
+- metadata: {}
+  model_id: ${env.OPENAI_INFERENCE_MODEL:=gpt-4o-mini}
+  provider_id: openai
+  provider_model_id: null
+- metadata:
+    embedding_dimension: 768
+  model_id: ${env.EMBEDDINGS_MODEL:=./embeddings_model}
+  provider_id: inline_sentence-transformer
+  model_type: embedding
+shields: []
+vector_dbs:
+- metadata: {}
+  vector_db_id: "aap-product-docs-2_6"
+  provider_vector_db_id: ${env.PROVIDER_VECTOR_DB_ID}
+  embedding_model: ${env.EMBEDDINGS_MODEL:=./embeddings_model}
+  embedding_dimension: 768
+  provider_id: "aap_faiss"
+datasets: []
+scoring_fns: []
+benchmarks: []
+tool_groups:
+  - toolgroup_id: builtin::rag
+    provider_id: rag-runtime
+logging: null
+server:
+  port: 8322
+  tls_certfile: null
+  tls_keyfile: null
+  tls_cafile: null
+  auth: null
+  disable_ipv6: false
+external_providers_dir: ${env.EXTERNAL_PROVIDERS_DIR:=/.llama/providers.d}
+
