@@ -19,7 +19,7 @@ ecdsa==0.19.1
 faiss-cpu==1.11.0
 fastapi==0.121.2
 fastuuid==0.14.0
-filelock==3.18.0
+filelock==3.20.2
 fire==0.7.0
 frozenlist==1.7.0
 fsspec==2025.5.1
