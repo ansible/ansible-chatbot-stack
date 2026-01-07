@@ -21,7 +21,7 @@ fastapi==0.121.2
 fastuuid==0.14.0
 filelock==3.20.2
 fire==0.7.0
-frozenlist==1.7.0
+frozenlist==1.8.0
 fsspec==2025.5.1
 googleapis-common-protos==1.70.0
 greenlet==3.2.3 ; (python_full_version < '3.14' and platform_machine == 'AMD64') or (python_full_version < '3.14' and platform_machine == 'WIN32') or (python_full_version < '3.14' and platform_machine == 'aarch64') or (python_full_version < '3.14' and platform_machine == 'amd64') or (python_full_version < '3.14' and platform_machine == 'ppc64le') or (python_full_version < '3.14' and platform_machine == 'win32') or (python_full_version < '3.14' and platform_machine == 'x86_64')
