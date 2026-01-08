@@ -98,10 +98,7 @@ check-env-build:
 		exit 1; \
 	fi
 
-requirements.txt: uv.lock
-	uv export --no-hashes --no-header --no-annotate --no-dev --format requirements.txt > requirements.txt
-
-build: check-env-build setup requirements.txt
+build: check-env-build setup
 	@echo "Building customized Ansible Chatbot Stack image from lightspeed-core/lightspeed-stack..."
 	$(CONTAINER_RUNTIME) build --no-cache --platform $(PLATFORM) -f ./Containerfile \
 		--build-arg ANSIBLE_CHATBOT_VERSION=$(ANSIBLE_CHATBOT_VERSION) \
