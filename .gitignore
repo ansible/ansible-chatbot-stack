@@ -182,3 +182,6 @@ trace_store.db
 /vector_db
 /llama-stack
 /work
+
+# ignor building files
+requirements.txt

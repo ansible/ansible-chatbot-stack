@@ -21,7 +21,10 @@ RUN pip3.12 install uv
 
 # Add explicit files and directories
 # (avoid accidental inclusion of local directories or env files or credentials)
-COPY requirements.txt LICENSE.md README.md ./
+COPY pyproject.toml uv.lock LICENSE.md README.md ./
+
+# generate requirements.txt file for dependencies packages from ansible-chatbot-stack
+RUN uv export --no-hashes --no-header --no-annotate --no-dev --format requirements.txt > requirements.txt
 
 RUN uv pip install -r requirements.txt
 # ======================================================
