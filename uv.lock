@@ -133,7 +133,7 @@ dev = [
 requires-dist = [
     { name = "dumb-init", specifier = ">=1.2.5.post1" },
     { name = "faiss-cpu", specifier = "~=1.11" },
-    { name = "lightspeed-stack-providers", specifier = "==0.1.17" },
+    { name = "lightspeed-stack-providers", specifier = "==0.1.18" },
     { name = "litellm", specifier = ">=1.79.0" },
     { name = "mcp", specifier = "~=1.24" },
     { name = "sentence-transformers", specifier = ">=5.0.0" },
@@ -1035,19 +1035,20 @@ wheels = [
 
 [[package]]
 name = "lightspeed-stack-providers"
-version = "0.1.17"
+version = "0.1.18"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
     { name = "litellm" },
     { name = "llama-stack" },
     { name = "llama-stack-client" },
+    { name = "mcp" },
     { name = "pydantic" },
     { name = "sqlalchemy" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a2/59/2b0f4f95082d6436af3f48d5890e343e07a27e0917f918bbb712f4d06e2f/lightspeed_stack_providers-0.1.17.tar.gz", hash = "sha256:ea7e91f688b22bff566328ed970e1d1f8ee4d3d62cb6e691792f3defd53fe1d9", size = 22306, upload-time = "2025-10-28T16:33:45.361Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/90/e1/10edad57f6a9fd1f20daf1d8085ba1b904c2b917aa937994d9ff4227b663/lightspeed_stack_providers-0.1.18.tar.gz", hash = "sha256:b2c03d004af5b49e1e511b4856401c28993ac53a85827268b628f9ba08ac1751", size = 29477, upload-time = "2026-01-09T09:04:33.324Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/90/5c/c0db84fa88881481b1d52b3546f638d9f8f85f14a7635afa23959ff426fa/lightspeed_stack_providers-0.1.17-py3-none-any.whl", hash = "sha256:49c3a5d02f7e84b87db6edc4e248cdf7fb17cfe6c77defedf83c60f7931479e4", size = 28321, upload-time = "2025-10-28T16:33:44.256Z" },
+    { url = "https://files.pythonhosted.org/packages/53/54/86f0e35e7d0105f917e43895ea96796d5eb537497549cc1caf093a634cac/lightspeed_stack_providers-0.1.18-py3-none-any.whl", hash = "sha256:3c7508a3ad06b1e29c5745fef1d436aa629c050663703ad9d087cd97113eb709", size = 40157, upload-time = "2026-01-09T09:04:32.183Z" },
 ]
 
 [[package]]
