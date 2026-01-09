@@ -48,6 +48,7 @@ providers:
   - provider_id: lightspeed_inline_agent
     provider_type: inline::lightspeed_inline_agent
     config:
+#      chatbot_temperature_override: 1.0
       persistence_store:
         type: sqlite
         namespace: null
