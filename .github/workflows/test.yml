@@ -13,7 +13,7 @@ jobs:
     
     env:
       ANSIBLE_CHATBOT_VERSION: 'test'
-      CONTAINER_RUNTIME: 'docker'
+      CONTAINER_RUNTIME: 'podman'
       SERVER_STARTUP_TIMEOUT: '300'
       UV_CACHE_DIR: /tmp/.uv-cache
       HF_HOME: /tmp/.cache/huggingface
@@ -57,28 +57,22 @@ jobs:
           restore-keys: |
             hf-models-${{ runner.os }}-
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Setup test data
         run: make setup-test
 
-      - name: Generate requirements.txt
-        run: make requirements.txt
-
-      - name: Build container image
-        uses: docker/build-push-action@v6
+      - name: Build container image with Buildah
+        id: build-image
+        uses: redhat-actions/buildah-build@v2
         with:
-          file: Containerfile
-          push: false
-          load: true
-          tags: ansible-chatbot-stack:test
-          context: .
+          image: ansible-chatbot-stack
+          tags: test
+          containerfiles: |
+            ./Containerfile
           build-args: |
             ANSIBLE_CHATBOT_VERSION=test
 
       - name: Verify container image
-        run: docker images ansible-chatbot-stack:test
+        run: podman images ${{ steps.build-image.outputs.image-with-tag }}
 
       - name: Run integration tests
         run: uv run --group test pytest tests/ -v -s --tb=long
@@ -98,7 +92,7 @@ jobs:
         run: |
           echo "## Test Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Container Image**: ansible-chatbot-stack:test" >> $GITHUB_STEP_SUMMARY
+          echo "- **Container Image**: ${{ steps.build-image.outputs.image-with-tag }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           if [ "${{ job.status }}" == "success" ]; then
