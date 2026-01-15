@@ -1,6 +1,9 @@
 #!/bin/bash
 MOUNTPATH=/.llama/data
 
+VECTOR_DB_PATH="/.llama/data/distributions/ansible-chatbot"
+FAISS_STORE_DB_FILE="aap_faiss_store.db"
+
 PYTHON_CMD="$@"
 
 echo "Checking preloaded embedding model..."
@@ -23,6 +26,17 @@ else
       echo "Symlink /.llama/data/distributions/ansible-chatbot/embeddings_model has been created."
     fi
   fi
+fi
+
+# cleanup vector db directory if exists
+if [ -d "$VECTOR_DB_PATH" ]; then
+    # Loop through all .db files in vector db directory
+    for db_file in "$VECTOR_DB_PATH"/*.db; do
+        # if the matched db_file exists and its filename is not FAISS_STORE_DB_FILE, remove it
+        if [ -e "$db_file" ] && [ "$(basename "$db_file")" != "$FAISS_STORE_DB_FILE" ]; then
+            rm "$db_file"
+        fi
+    done
 fi
 
 ${PYTHON_CMD} /app-root/src/lightspeed_stack.py --config /.llama/distributions/ansible-chatbot/config/lightspeed-stack.yaml
