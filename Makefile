@@ -8,7 +8,7 @@ ANSIBLE_CHATBOT_VLLM_API_TOKEN ?=
 ANSIBLE_CHATBOT_INFERENCE_MODEL ?=
 ANSIBLE_CHATBOT_INFERENCE_MODEL_FILTER ?=
 LLAMA_STACK_PORT ?= 8321
-LOCAL_DB_PATH ?= .
+LOCAL_DB_PATH ?= ./local_db
 CONTAINER_DB_PATH ?= /.llama/data/distributions/ansible-chatbot
 RAG_CONTENT_IMAGE ?= quay.io/ansible/aap-rag-content:latest
 LIGHTSPEED_STACK_CONFIG ?= lightspeed-stack.yaml
@@ -181,7 +181,18 @@ check-env-run-local-db: check-env-run
 		exit 1; \
 	fi
 
-run-local-db: check-env-run-local-db
+local_db:
+	@if [ ! -d "$(LOCAL_DB_PATH)" ]; then \
+		echo "Creating LOCAL_DB_PATH directory..."; \
+		mkdir "$(LOCAL_DB_PATH)"; \
+	fi
+
+local_db_store:
+	@if [ ! -e "$(LOCAL_DB_PATH)/aap_faiss_store.db" ]; then \
+		cp ./vector_db/aap_faiss_store.db "$(LOCAL_DB_PATH)/"; \
+	fi
+
+run-local-db: check-env-run-local-db local_db local_db_store
 	@echo "Running Ansible Chatbot Stack container..."
 	@echo "Using vLLM URL: $(ANSIBLE_CHATBOT_VLLM_URL)"
 	@echo "Using inference model: $(ANSIBLE_CHATBOT_INFERENCE_MODEL)"
@@ -189,8 +200,8 @@ run-local-db: check-env-run-local-db
 	@echo "Mapping local DB from $(LOCAL_DB_PATH) to $(CONTAINER_DB_PATH)"
 	$(CONTAINER_RUNTIME) run --platform $(PLATFORM) --security-opt label=disable -it -p $(LLAMA_STACK_PORT):8080 \
 	  -v $(LOCAL_DB_PATH):$(CONTAINER_DB_PATH) \
-	  -v ./embeddings_model:/app/embeddings_model \
-	  -v ./vector_db/aap_faiss_store.db:$(CONTAINER_DB_PATH)/aap_faiss_store.db \
+	  -v ./embeddings_model:/.llama/data/embeddings_model \
+	  -v $(LOCAL_DB_PATH)/aap_faiss_store.db:$(CONTAINER_DB_PATH)/aap_faiss_store.db \
 	  -v ./$(LIGHTSPEED_STACK_CONFIG):/.llama/distributions/ansible-chatbot/config/lightspeed-stack.yaml \
 	  -v ./$(LLAMA_STACK_RUN_CONFIG):/.llama/distributions/llama-stack/config/ansible-chatbot-run.yaml \
 	  -v ./$(SYSTEM_PROMPT):/.llama/distributions/ansible-chatbot/system-prompts/default.txt \
@@ -214,6 +225,7 @@ clean:
 	rm -rf vector_db/
 	rm -rf providers.d/
 	rm -rf work/
+	rm -rf local_db/
 	rm -f requirements.txt
 	@echo "Removing ansible-chatbot-stack images..."
 	$(CONTAINER_RUNTIME) rmi -f $$($(CONTAINER_RUNTIME) images -a -q --filter reference=ansible-chatbot-stack) || true
