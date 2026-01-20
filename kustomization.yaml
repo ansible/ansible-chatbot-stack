@@ -9,7 +9,7 @@ images:
   newTag: latest
 - name: ansible-mcp-gateway
   newName: quay.io/ansible/ansible-mcp-gateway
-  newTag: 0.9.202511261631
+  newTag: 0.9.202601191917
 - name: ansible-mcp-controller
   newName: quay.io/ansible/ansible-mcp-controller
   newTag: 0.9.202511261631
