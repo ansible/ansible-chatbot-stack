@@ -6,7 +6,7 @@ ARG GIT_COMMIT=git-commit-not-defined
 # ======================================================
 # Transient image to construct Python venv
 # ------------------------------------------------------
-FROM quay.io/lightspeed-core/lightspeed-stack:0.3.1 AS builder
+FROM quay.io/lightspeed-core/lightspeed-stack:0.4.1 AS builder
 
 ARG APP_ROOT=/app-root
 WORKDIR /app-root
@@ -22,6 +22,10 @@ RUN pip3.12 install uv
 # Add explicit files and directories
 # (avoid accidental inclusion of local directories or env files or credentials)
 COPY pyproject.toml uv.lock LICENSE.md README.md ./
+
+# TODO Copy lightspeed-providers wheel file
+RUN mkdir -p ./wheel
+COPY wheel/lightspeed_stack_providers-0.4.1-py3-none-any.whl ./wheel
 
 # generate requirements.txt file for dependencies packages from ansible-chatbot-stack
 RUN uv export --no-hashes --no-header --no-annotate --no-dev --format requirements.txt > requirements.txt
@@ -71,7 +75,6 @@ RUN echo -e "\
 }\n\
 " > /.llama/distributions/ansible-chatbot/ansible-chatbot-version-info.json
 ADD llama-stack/providers.d /.llama/providers.d
-
 # Bootstrap
 ADD entrypoint.sh /.llama
 
