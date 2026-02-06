@@ -75,8 +75,7 @@ setup: setup-vector-db llama-stack/providers.d/inline/agents/lightspeed_inline_a
 llama-stack/providers.d/inline/agents/lightspeed_inline_agent.yaml:
 	@echo "Setting up environment..."
 	uv sync
-	mkdir -p llama-stack/providers.d/inline/agents/
-	curl -o llama-stack/providers.d/inline/agents/lightspeed_inline_agent.yaml https://raw.githubusercontent.com/lightspeed-core/lightspeed-providers/refs/tags/0.1.18/resources/external_providers/inline/agents/lightspeed_inline_agent.yaml
+	scripts/download_agent_yaml.sh
 	@echo "Environment setup complete."
 
 setup-test: llama-stack/providers.d/inline/agents/lightspeed_inline_agent.yaml
@@ -160,6 +159,7 @@ run: check-env-run
 	  --env OPENAI_BASE_URL=$(OPENAI_BASE_URL) \
 	  --env PROVIDER_VECTOR_DB_ID=$(PROVIDER_VECTOR_DB_ID) \
 	  --env CHATBOT_API_TOKEN=$(CHATBOT_API_TOKEN) \
+	  --env OTEL_SDK_DISABLED=true \
 	  $(IMAGE_PREFIX)ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION)
 
 run-test:
@@ -215,6 +215,7 @@ run-local-db: check-env-run-local-db local_db local_db_store
 	  --env OPENAI_BASE_URL=$(OPENAI_BASE_URL) \
 	  --env PROVIDER_VECTOR_DB_ID=$(PROVIDER_VECTOR_DB_ID) \
 	  --env CHATBOT_API_TOKEN=$(CHATBOT_API_TOKEN) \
+	  --env OTEL_SDK_DISABLED=true \
 	  $(IMAGE_PREFIX)ansible-chatbot-stack:$(ANSIBLE_CHATBOT_VERSION)
 
 clean:
