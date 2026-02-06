@@ -6,7 +6,7 @@ ARG GIT_COMMIT=git-commit-not-defined
 # ======================================================
 # Transient image to construct Python venv
 # ------------------------------------------------------
-FROM quay.io/lightspeed-core/lightspeed-stack:0.3.1 AS builder
+FROM quay.io/lightspeed-core/lightspeed-stack:dev-latest AS builder
 
 ARG APP_ROOT=/app-root
 WORKDIR /app-root
@@ -70,8 +70,8 @@ RUN echo -e "\
   \"gitCommit\": \"${GIT_COMMIT}\" \n\
 }\n\
 " > /.llama/distributions/ansible-chatbot/ansible-chatbot-version-info.json
-ADD llama-stack/providers.d /.llama/providers.d
-
+# ADD llama-stack/providers.d /.llama/providers.d
+RUN mkdir -p /.llama/providers.d
 # Bootstrap
 ADD entrypoint.sh /.llama
 
