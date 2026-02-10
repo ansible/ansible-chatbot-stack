@@ -23,6 +23,10 @@ RUN pip3.12 install uv
 # (avoid accidental inclusion of local directories or env files or credentials)
 COPY pyproject.toml uv.lock LICENSE.md README.md ./
 
+# Copy lightspeed-providers wheel file
+RUN mkdir -p ./wheel
+COPY wheel/lightspeed_stack_providers-0.4.1-py3-none-any.whl ./wheel
+
 # generate requirements.txt file for dependencies packages from ansible-chatbot-stack
 RUN uv export --no-hashes --no-header --no-annotate --no-dev --format requirements.txt > requirements.txt
 
@@ -70,8 +74,7 @@ RUN echo -e "\
   \"gitCommit\": \"${GIT_COMMIT}\" \n\
 }\n\
 " > /.llama/distributions/ansible-chatbot/ansible-chatbot-version-info.json
-# ADD llama-stack/providers.d /.llama/providers.d
-RUN mkdir -p /.llama/providers.d
+ADD llama-stack/providers.d /.llama/providers.d
 # Bootstrap
 ADD entrypoint.sh /.llama
 

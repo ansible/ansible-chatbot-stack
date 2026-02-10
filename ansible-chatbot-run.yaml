@@ -43,23 +43,22 @@ providers:
     config:
       excluded_categories: []
   agents:
-#  - provider_id: lightspeed_inline_agent
-#    provider_type: inline::lightspeed_inline_agent
-#    config:
-##      chatbot_temperature_override: 1.0
-#      persistence_store:
-#        type: sqlite
-#        namespace: null
-#        db_path: ${env.PROVIDERS_DB_DIR:=/.llama/data/distributions/ansible-chatbot}/agents_store.db
-#      responses_store:
-#        type: sqlite
-#        namespace: null
-#        db_path: ${env.PROVIDERS_DB_DIR:=/.llama/data/distributions/ansible-chatbot}/responses_store.db
-#      tools_filter:
-#        enabled: true
-#        model_id: ${env.INFERENCE_MODEL_FILTER:=}
-#        always_include_tools:
-#        - knowledge_search
+  - provider_id: lightspeed_inline_agent
+    provider_type: inline::lightspeed_inline_agent
+    config:
+#      chatbot_temperature_override: 1.0
+      persistence:
+        agent_state:
+          namespace: lightspeed_agents
+          backend: kv_default
+        responses:
+          table_name: lightspeed_responses
+          backend: sql_default
+      tools_filter:
+        enabled: true
+        model_id: ${env.INFERENCE_MODEL_FILTER:=}
+        always_include_tools:
+        - knowledge_search
   - provider_id: meta-reference
     provider_type: inline::meta-reference
     config:
