@@ -6,7 +6,7 @@ ARG GIT_COMMIT=git-commit-not-defined
 # ======================================================
 # Transient image to construct Python venv
 # ------------------------------------------------------
-FROM quay.io/lightspeed-core/lightspeed-stack:0.3.1 AS builder
+FROM quay.io/lightspeed-core/lightspeed-stack:0.4.1 AS builder
 
 ARG APP_ROOT=/app-root
 WORKDIR /app-root
