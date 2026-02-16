@@ -59,16 +59,6 @@ providers:
         model_id: ${env.INFERENCE_MODEL_FILTER:=}
         always_include_tools:
         - knowledge_search
-  - provider_id: meta-reference
-    provider_type: inline::meta-reference
-    config:
-      persistence:
-        agent_state:
-          namespace: agents_state
-          backend: kv_default
-        responses:
-          table_name: agents_responses
-          backend: sql_default
   datasetio:
   - provider_id: localfs
     provider_type: inline::localfs
@@ -98,10 +88,10 @@ storage:
       db_path: ${env.VECTOR_DB_DIR:=/.llama/data/distributions/ansible-chatbot}/aap_faiss_store.db
     kv_default:
       type: kv_sqlite
-      db_path: /tmp/kv_store.db
+      db_path: ${env.KV_STORE_DB_DIR:=/.llama/data/distributions/ansible-chatbot}/kv_store.db
     sql_default:
       type: sql_sqlite
-      db_path: /tmp/sql_store.db
+      db_path: ${env.SQL_STORE_DB_DIR:=/.llama/data/distributions/ansible-chatbot}/sql_store.db
   stores:
     metadata:
       namespace: registry
@@ -145,8 +135,7 @@ registered_resources:
         uri: http://localhost:8004/sse
     - toolgroup_id: mcp::aap-lightspeed
       provider_id: model-context-protocol
-      mcp_endpoint:
-        uri: http://localhost:8005/sse
+      url: http://localhost:8005/sse
   safety:
     - default_shield_id: llama-guard
 vector_stores:
