@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "faiss-cpu~=1.11",
-    #    "lightspeed-stack-providers==0.1.18",
+    # "lightspeed-stack-providers==0.1.18",
     "llama-stack==0.4.3",
     "llama-stack-api==0.4.4",
     "llama-stack-client==0.4.3",
@@ -33,5 +33,3 @@ test = [
     "requests>=2.31.0",
 ]
 
-[tool.uv.sources]
-lightspeed-stack-providers = { path = "wheel/lightspeed_stack_providers-0.4.1-py3-none-any.whl" }
