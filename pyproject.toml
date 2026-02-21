@@ -15,8 +15,6 @@ dependencies = [
     "urllib3>=2.6.3",
     "authlib>=1.6.6",
     "pyasn1==0.6.2",
-    # Need to pin transitive dependency to handle CVE
-    "python-multipart==0.0.22", # CVE-2026-24486
 ]
 
 [dependency-groups]
