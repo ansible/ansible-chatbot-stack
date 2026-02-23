@@ -76,7 +76,7 @@ llama-stack/providers.d/inline/agents/lightspeed_inline_agent.yaml:
 	@echo "Setting up environment..."
 	uv sync
 	mkdir -p llama-stack/providers.d/inline/agents/
-	curl -o llama-stack/providers.d/inline/agents/lightspeed_inline_agent.yaml https://raw.githubusercontent.com/lightspeed-core/lightspeed-providers/741ad1f8fddc/resources/external_providers/inline/agents/lightspeed_inline_agent.yaml
+	https://raw.githubusercontent.com/lightspeed-core/lightspeed-providers/refs/tags/0.1.18/resources/external_providers/inline/agents/lightspeed_inline_agent.yaml
 	@echo "Environment setup complete."
 
 setup-test: llama-stack/providers.d/inline/agents/lightspeed_inline_agent.yaml
