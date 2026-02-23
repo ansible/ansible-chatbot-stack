@@ -16,6 +16,9 @@ dependencies = [
     "authlib>=1.6.6",
     "pyasn1==0.6.2",
     # Need to pin transitive dependency to handle CVE
+    "aiohttp==3.13.3", # CVE-2025-69223
+    "cryptography==46.0.5", # CVE-2026-26007
+    "pillow==12.1.1", # CVE-2026-25990
     "python-multipart==0.0.22", # CVE-2026-24486
 ]
 
