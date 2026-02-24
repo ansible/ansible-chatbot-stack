@@ -235,7 +235,7 @@ spec:
           value: |
             #!/bin/sh
             mkdir -p llama-stack/providers.d/inline/agents/
-            curl -o llama-stack/providers.d/inline/agents/lightspeed_inline_agent.yaml https://raw.githubusercontent.com/lightspeed-core/lightspeed-providers/refs/heads/main/resources/external_providers/inline/agents/lightspeed_inline_agent.yaml
+            curl -o llama-stack/providers.d/inline/agents/lightspeed_inline_agent.yaml https://raw.githubusercontent.com/lightspeed-core/lightspeed-providers/refs/tags/0.1.18/resources/external_providers/inline/agents/lightspeed_inline_agent.yaml
         - name: HERMETIC
           value: $(params.hermetic)
         - name: SOURCE_ARTIFACT
