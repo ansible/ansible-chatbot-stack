@@ -41,7 +41,7 @@ jobs:
       - name: Fetch providers.d information
         run: |
           mkdir -p llama-stack/providers.d/inline/agents/
-          curl -o llama-stack/providers.d/inline/agents/lightspeed_inline_agent.yaml https://raw.githubusercontent.com/lightspeed-core/lightspeed-providers/refs/heads/main/resources/external_providers/inline/agents/lightspeed_inline_agent.yaml
+          curl -o llama-stack/providers.d/inline/agents/lightspeed_inline_agent.yaml https://raw.githubusercontent.com/lightspeed-core/lightspeed-providers/refs/tags/0.1.18/resources/external_providers/inline/agents/lightspeed_inline_agent.yaml
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
