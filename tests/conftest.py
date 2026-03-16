@@ -62,7 +62,29 @@ class MockOpenAIHandler(BaseHTTPRequestHandler):
         else:
             self.send_response(404)
             self.end_headers()
-    
+
+    def do_GET(self):
+        """Handle GET requests to OpenAI API."""
+        if self.path == "/v1/models":
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            response = {
+              "object": "list",
+              "data": [
+                {
+                  "id": "gpt-4o-mini",
+                  "object": "model",
+                  "created": 1686935002,
+                  "owned_by": "openai"
+                },
+              ]
+            }
+            self.wfile.write(json.dumps(response).encode())
+        else:
+            self.send_response(404)
+            self.end_headers()
+
     def _handle_streaming_response(self):
         """Return a streaming SSE response."""
         self.send_response(200)
@@ -341,7 +363,7 @@ def chatbot_server(mock_openai_server):
         
         # Start threads to capture stdout and stderr
         stdout_thread = threading.Thread(
-            target=capture_output, 
+            target=capture_output,
             args=(process.stdout, "[STDOUT] "),
             daemon=True
         )
