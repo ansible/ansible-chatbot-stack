@@ -14,6 +14,17 @@ user_data_collection:
   transcripts_enabled: false
 customization:
   system_prompt_path: /.llama/distributions/ansible-chatbot/system-prompts/default.txt
+byok_rag:
+  - rag_id: my-docs           # Unique identifier for this knowledge source
+    rag_type: inline::faiss
+    embedding_model: sentence-transformers//.llama/data/embeddings_model
+    embedding_dimension: 768
+    vector_db_id: vs_c2410d03-ea78-491f-ab8e-28172c15431a  # Llama Stack vector store ID (from index generation)
+    db_path: /.llama/data/distributions/ansible-chatbot/byok_faiss_store.db
+    score_multiplier: 1.0       # Optional: weight results when mixing multiple sources
+rag:
+  tool:
+    - my-docs         # expose this BYOK store as the file_search tool
 #authentication:
 #  module: "api-key-token"
 #  api_key_config:

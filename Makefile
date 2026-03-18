@@ -146,6 +146,7 @@ run: check-env-run
 	$(CONTAINER_RUNTIME) run --platform $(PLATFORM) --security-opt label=disable -it -p $(LLAMA_STACK_PORT):8080 \
 	  -v ./embeddings_model:/.llama/data/embeddings_model \
 	  -v ./vector_db/aap_faiss_store.db:$(CONTAINER_DB_PATH)/aap_faiss_store.db \
+	  -v ./byok_vector_db/byok_faiss_store.db:$(CONTAINER_DB_PATH)/byok_faiss_store.db \
 	  -v ./$(LIGHTSPEED_STACK_CONFIG):/.llama/distributions/ansible-chatbot/config/lightspeed-stack.yaml \
 	  -v ./$(LLAMA_STACK_RUN_CONFIG):/.llama/distributions/llama-stack/config/ansible-chatbot-run.yaml \
 	  -v ./$(SYSTEM_PROMPT):/.llama/distributions/ansible-chatbot/system-prompts/default.txt \
