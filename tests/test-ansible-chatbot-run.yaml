@@ -16,7 +16,7 @@ providers:
     config:
       api_key: ${env.OPENAI_API_KEY:=fake-test-key}
       base_url: ${env.OPENAI_BASE_URL:=https://api.openai.com/v1}
-  - provider_id: inline_sentence-transformer
+  - provider_id: sentence-transformers
     provider_type: inline::sentence-transformers
     config: {}
   vector_io:
@@ -91,14 +91,14 @@ registered_resources:
     - metadata:
         embedding_dimension: 768
       model_id: sentence-transformers/all-mpnet-base-v2
-      provider_id: inline_sentence-transformer
+      provider_id: sentence-transformers
       provider_model_id: ${env.EMBEDDINGS_MODEL:=/.llama/data/embeddings_model}
       model_type: embedding
   shields: []
   vector_stores:
     - metadata: {}
       vector_store_id: ${env.PROVIDER_VECTOR_DB_ID:=}
-      embedding_model: inline_sentence-transformer/${env.EMBEDDINGS_MODEL:=/.llama/data/embeddings_model}
+      embedding_model: sentence-transformers/${env.EMBEDDINGS_MODEL:=/.llama/data/embeddings_model}
       embedding_dimension: 768
       provider_id: aap_faiss
   datasets: []
@@ -112,7 +112,7 @@ registered_resources:
 vector_stores:
   default_provider_id: aap_faiss
   default_embedding_model: # Define the default embedding model for RAG
-    provider_id: inline_sentence-transformer
+    provider_id: sentence-transformers
     model_id: /.llama/data/embeddings_model
   annotation_prompt_params:
     enable_annotations: true
