@@ -32,7 +32,7 @@ endif
 
 
 
-.PHONY: help setup setup-test build build-custom run clean all deploy-k8s shell tag-and-push test
+.PHONY: help setup setup-test build build-custom run clean all deploy-k8s shell tag-and-push test update-lock
 
 .EXPORT_ALL_VARIABLES:
 
@@ -56,6 +56,7 @@ help:
 	@echo "  deploy-k8s        - Deploy to Kubernetes cluster"
 	@echo "  shell             - Get a shell in the container"
 	@echo "  tag-and-push      - Tag and push the container image to quay.io"
+	@echo "  update-lock       - Update uv.lock file"
 	@echo ""
 	@echo "Test targets:"
 	@echo "  test              - Run all tests (uses mock OpenAI server)"
@@ -273,6 +274,11 @@ all: setup build build-custom
 
 load-test:
 	uv run locust -f scripts/loading_test.py -t 120 --users 10 --spawn-rate 10 -H http://localhost:8321
+
+update-lock:
+	@echo "Updating uv.lock..."
+	uv lock
+	@echo "uv.lock updated successfully."
 
 test:
 	@echo "Running all tests (mock OpenAI server)..."
