@@ -5,22 +5,20 @@ description = "Ansible Lightspeed Intelligent Assistant (ALIA)"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "faiss-cpu~=1.11",
-    "lightspeed-stack-providers==0.4.2",
-    "mcp~=1.24",
-    "sentence-transformers>=5.0.0",
+    "aiohttp==3.13.3", # Transient dep pinned to handle CVE
+    "cryptography==46.0.5", # Transient dep pinned to handle CVE
     "dumb-init>=1.2.5.post1",
-    "litellm>=1.79.0",
-    "starlette>=0.49.1",
-    "urllib3>=2.6.3",
-    "authlib~=1.6.9",
+    "faiss-cpu==1.12",
+    "lightspeed-stack-providers==0.4.2",
+    "litellm==1.79.0",
+    "mcp==1.26.0",
+    "pillow==12.1.1", # Transient dep pinned to handle CVE
     "pyasn1==0.6.3",
-    # Need to pin transitive dependency to handle CVE
-    "aiohttp==3.13.3", # CVE-2025-69223
-    "cryptography==46.0.5", # CVE-2026-26007
-    "pillow==12.1.1", # CVE-2026-25990
-    "python-multipart==0.0.22", # CVE-2026-24486
-    "pyjwt[crypto]>=2.12.0", # CVE-2026-32597
+    "pyjwt[crypto]==2.12.0", # Transient dep pinned to handle CVE
+    "python-multipart==0.0.22", # Transient dep pinned to handle CVE
+    "sentence-transformers==5.2.2",
+    "starlette==0.50.0",
+    "urllib3==2.6.3",
 ]
 
 [dependency-groups]
@@ -28,6 +26,7 @@ dev = [
     "cachetools>=6.1.0",
     "kubernetes>=33.1.0",
     "locust>=2.39.1",
+    "pre-commit>=4.2.0",
 ]
 test = [
     "pytest>=8.0.0",
