@@ -10,7 +10,7 @@ dependencies = [
     "dumb-init>=1.2.5.post1",
     "faiss-cpu==1.12",
     "lightspeed-stack-providers==0.4.2",
-    "litellm==1.79.0",
+    "litellm==1.82.6",
     "mcp==1.26.0",
     "pillow==12.1.1", # Transient dep pinned to handle CVE
     "pyasn1==0.6.3",
