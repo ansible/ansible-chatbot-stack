@@ -5,7 +5,7 @@ description = "Ansible Lightspeed Intelligent Assistant (ALIA)"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "aiohttp==3.13.3", # Transient dep pinned to handle CVE
+    "aiohttp==3.13.5", # Transient dep pinned to handle CVE
     "cryptography==46.0.6", # Transient dep pinned to handle CVE
     "dumb-init>=1.2.5.post1",
     "faiss-cpu==1.12",
