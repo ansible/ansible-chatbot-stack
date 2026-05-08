@@ -26,7 +26,7 @@ jobs:
           password: ${{ secrets.QUAY_TOKEN }}
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: refs/heads/main
 
