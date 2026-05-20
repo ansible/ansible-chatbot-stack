@@ -1,4 +1,4 @@
-name: Ansible Lightspeed Intelligent Assistant (Test)
+name: Automation Intelligent Assistant (Test)
 service:
   host: 0.0.0.0
   port: 8322
