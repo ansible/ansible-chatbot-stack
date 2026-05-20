@@ -1,7 +1,7 @@
 [project]
 name = "ansible-chatbot-stack"
 version = "0.1.0"
-description = "Ansible Lightspeed Intelligent Assistant (ALIA)"
+description = "Automation Intelligent Assistant (AIA)"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

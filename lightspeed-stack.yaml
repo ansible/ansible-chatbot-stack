@@ -1,4 +1,4 @@
-name: Ansible Lightspeed Intelligent Assistant
+name: Automation Intelligent Assistant
 service:
   host: 0.0.0.0
   port: 8080
