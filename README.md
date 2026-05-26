@@ -114,6 +114,15 @@ Runs the image `ansible-chatbot-stack:$ANSIBLE_CHATBOT_VERSION` as a local conta
 
 > Change the `ANSIBLE_CHATBOT_VERSION` version and inference parameters below accordingly.
 
+### System Prompt
+
+Select the system prompt file based on the model type:
+
+| Model type | System prompt file |
+|---|---|
+| Granite models | `ansible-chatbot-system-prompt-granite-compat.txt` |
+| OpenAI-compatible models (default) | `ansible-chatbot-system-prompt.txt` |
+
 ```shell
     export ANSIBLE_CHATBOT_VERSION=0.0.1
     export ANSIBLE_CHATBOT_VLLM_URL=<YOUR_MODEL_SERVING_URL>
@@ -223,7 +232,10 @@ If you have the need for re-building images, apply the following clean-ups right
     INFERENCE_MODEL=granite-3.3-8b-instruct
 
     LIBRARY_CLIENT_CONFIG_PATH=./ansible-chatbot-run.yaml
+    # For OpenAI-compatible models (default):
     SYSTEM_PROMPT_PATH=./ansible-chatbot-system-prompt.txt
+    # For Granite models:
+    # SYSTEM_PROMPT_PATH=./ansible-chatbot-system-prompt-granite-compat.txt
     EMBEDDINGS_MODEL=./embeddings_model
     VECTOR_DB_DIR=./vector_db
     PROVIDERS_DB_DIR=./work
