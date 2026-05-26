@@ -13,6 +13,13 @@ jobs:
   build_push:
     runs-on: ubuntu-latest
 
+    # Only run for ansible organization
+    if: github.repository_owner == 'ansible'
+
+    permissions:
+      contents: write  # Needed for git push tags
+      packages: write  # Needed for pushing to quay.io
+
     env:
       ANSIBLE_CHATBOT_VERSION: ${{ github.event.inputs.version }}
 
