@@ -49,7 +49,7 @@ jobs:
       - name: SonarCloud Scan
         # Skip for fork PRs and Dependabot PRs where secrets are not available
         if: (github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request') && github.actor != 'dependabot[bot]'
-        uses: SonarSource/sonarqube-scan-action@v4
+        uses: SonarSource/sonarqube-scan-action@v8
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets[format('{0}', vars.SONAR_TOKEN_SECRET_NAME)] }}
