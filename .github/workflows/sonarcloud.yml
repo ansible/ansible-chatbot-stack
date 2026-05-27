@@ -41,14 +41,14 @@ jobs:
           echo "REPO_NAME=$REPO_NAME" >> $GITHUB_ENV
 
       - name: Verify SONAR_TOKEN is set
-        if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request'
+        if: (github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request') && github.actor != 'dependabot[bot]'
         run: test -n "$SONAR_TOKEN" || { echo "SONAR_TOKEN is empty — check vars.SONAR_TOKEN_SECRET_NAME"; exit 1; }
         env:
           SONAR_TOKEN: ${{ secrets[format('{0}', vars.SONAR_TOKEN_SECRET_NAME)] }}
 
       - name: SonarCloud Scan
-        # Skip for fork PRs where secrets are not available
-        if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request'
+        # Skip for fork PRs and Dependabot PRs where secrets are not available
+        if: (github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request') && github.actor != 'dependabot[bot]'
         uses: SonarSource/sonarqube-scan-action@v4
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
