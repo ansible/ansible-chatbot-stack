@@ -1,5 +1,5 @@
 #!/bin/bash
-LS_PROVIDERS_VERSION=0.4.2
+LS_PROVIDERS_VERSION=0.5.0
 OUT_DIR=llama-stack/providers.d/inline/agents
 AGENT_YAML=lightspeed_inline_agent.yaml
 
