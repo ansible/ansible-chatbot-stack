@@ -84,6 +84,35 @@ jobs:
       - name: Run integration tests
         run: uv run --group test pytest tests/ -v -s --tb=long
 
+      # Generate minimal coverage report for Codecov onboarding
+      # This ensures the repository appears as "onboarded" in Codecov dashboard
+      # for management tracking and DORA metrics, even without actual coverage data.
+      # Note: This is an infrastructure/integration project with no Python source code to cover.
+      # The tests verify the containerized chatbot stack works end-to-end via HTTP API.
+      - name: Generate placeholder coverage report
+        run: |
+          cat > coverage.xml << 'EOF'
+          <?xml version="1.0" ?>
+          <coverage version="1.0">
+            <packages>
+              <package name="ansible-chatbot-stack" line-rate="0.0" branch-rate="0.0" complexity="0">
+                <classes></classes>
+              </package>
+            </packages>
+          </coverage>
+          EOF
+
+      - name: Upload coverage to Codecov
+        # Skip for fork PRs where secrets are not available
+        if: (github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request') && github.actor != 'dependabot[bot]'
+        uses: codecov/codecov-action@0f8570b1a125f4937846a11fcfa3bcd548bd8c97 # v4.6.0
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          url: ${{ vars.CODECOV_URL }}
+          files: ./coverage.xml
+          flags: ansible-chatbot-stack
+          fail_ci_if_error: false
+
       - name: Upload test artifacts (on failure)
         if: failure()
         uses: actions/upload-artifact@v4
