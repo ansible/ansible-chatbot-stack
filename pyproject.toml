@@ -11,7 +11,7 @@ dependencies = [
     "faiss-cpu==1.12",
     "lightspeed-stack-providers==0.4.3",
     "litellm==1.83.14",
-    "mcp==1.26.0",
+    "mcp==1.28.1",
     "pillow==12.2.0", # Transient dep pinned to handle CVE
     "python-dotenv>=1.2.2", # Transient dep pinned to handle CVE
     "pyasn1==0.6.3",
