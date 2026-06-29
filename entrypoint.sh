@@ -109,4 +109,74 @@ else
     echo "BYOK provider vector DB ID file not found: ${BYOK_PROVIDER_VECTOR_DB_ID_FILE_PATH}"
 fi
 
+# Wait for MCP sidecar endpoints to be ready before starting lightspeed-stack.
+# On OCP, all containers in a pod start simultaneously. The MCP sidecars may not
+# be listening yet when lightspeed_stack.py tries to register MCP tool groups,
+# causing a startup crash. This block polls each MCP server port until it accepts
+# TCP connections, then proceeds. If sidecars don't come up in time, the chatbot
+# starts anyway in degraded mode (without MCP tools).
+
+LIGHTSPEED_STACK_CONFIG="/.llama/distributions/ansible-chatbot/config/lightspeed-stack.yaml"
+MCP_WAIT_MAX_ATTEMPTS="${MCP_WAIT_MAX_ATTEMPTS:-30}"
+MCP_WAIT_INTERVAL="${MCP_WAIT_INTERVAL:-2}"
+
+wait_for_port() {
+    local host="$1"
+    local port="$2"
+    local label="${host}:${port}"
+    local attempt=1
+
+    echo "Waiting for MCP endpoint ${label} ..."
+    while [[ $attempt -le $MCP_WAIT_MAX_ATTEMPTS ]]; do
+        if python3 -c "
+import socket, sys
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.settimeout(2)
+try:
+    s.connect(('${host}', ${port}))
+    s.close()
+    sys.exit(0)
+except Exception:
+    sys.exit(1)
+" 2>/dev/null; then
+            echo "MCP endpoint ${label} is ready (attempt ${attempt}/${MCP_WAIT_MAX_ATTEMPTS})"
+            return 0
+        fi
+        echo "MCP endpoint ${label} not ready (attempt ${attempt}/${MCP_WAIT_MAX_ATTEMPTS}), retrying in ${MCP_WAIT_INTERVAL}s..."
+        sleep "${MCP_WAIT_INTERVAL}"
+        attempt=$((attempt + 1))
+    done
+    echo "WARNING: MCP endpoint ${label} not ready after ${MCP_WAIT_MAX_ATTEMPTS} attempts ($(( MCP_WAIT_MAX_ATTEMPTS * MCP_WAIT_INTERVAL ))s). Starting in degraded mode."
+    return 1
+}
+
+if [[ "${MCP_WAIT_DISABLED:-false}" == "true" ]]; then
+    echo "MCP readiness check disabled (MCP_WAIT_DISABLED=true), skipping."
+elif [[ ! -f "${LIGHTSPEED_STACK_CONFIG}" ]]; then
+    echo "Config file not found at ${LIGHTSPEED_STACK_CONFIG}, skipping MCP readiness check."
+else
+    MCP_ENDPOINTS=$(grep -E '^\s+url:\s' "${LIGHTSPEED_STACK_CONFIG}" 2>/dev/null \
+        | grep -oE 'https?://[^"'"'"' ]+' \
+        | sed -E 's|https?://||; s|/.*||')
+
+    if [[ -n "${MCP_ENDPOINTS}" ]]; then
+        echo "MCP server endpoints detected, waiting for sidecar readiness..."
+        MCP_ALL_READY=true
+        for endpoint in ${MCP_ENDPOINTS}; do
+            host="${endpoint%%:*}"
+            port="${endpoint##*:}"
+            if ! wait_for_port "${host}" "${port}"; then
+                MCP_ALL_READY=false
+            fi
+        done
+        if [[ "${MCP_ALL_READY}" == "true" ]]; then
+            echo "All MCP endpoints are ready."
+        else
+            echo "WARNING: Not all MCP endpoints are ready. Chatbot will start without full MCP support."
+        fi
+    else
+        echo "No MCP server endpoints found in config, skipping readiness check."
+    fi
+fi
+
 ${PYTHON_CMD} /app-root/src/lightspeed_stack.py --config /.llama/distributions/ansible-chatbot/config/lightspeed-stack.yaml
