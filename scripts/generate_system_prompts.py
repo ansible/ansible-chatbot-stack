@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate system prompt files from the upstream operator Jinja2 template.
+"""Generate system prompt files from the upstream canonical Jinja2 template.
 
 Downloads the chatbot system prompt template from ansible-ai-connect-operator
 and renders it with the appropriate variables to produce:
@@ -12,12 +12,11 @@ import sys
 import urllib.request
 
 import jinja2
-import yaml
 
 TEMPLATE_URL = (
     "https://raw.githubusercontent.com/ansible/ansible-ai-connect-operator/"
     "refs/heads/main/roles/chatbot/templates/"
-    "chatbot.configmap_system_prompt.yaml.j2"
+    "ansible-chatbot-system-prompt.txt.j2"
 )
 
 PRODUCT_NAME = "Automation Intelligent Assistant"
@@ -53,20 +52,11 @@ def render_template(template_source, variables):
         trim_blocks=True,
         lstrip_blocks=True,
     )
-    env.globals["lookup"] = lambda *args, **kwargs: "placeholder: true"
     template = env.from_string(template_source)
-    rendered = template.render(
+    return template.render(
         chatbot_product_name=PRODUCT_NAME,
-        ansible_operator_meta={"name": "placeholder", "namespace": "placeholder"},
-        deployment_type="placeholder",
         **variables,
     )
-    return rendered
-
-
-def extract_system_prompt(rendered_yaml):
-    doc = yaml.safe_load(rendered_yaml)
-    return doc["data"]["DEFAULT_SYSTEM_PROMPT"]
 
 
 def main():
@@ -81,8 +71,7 @@ def main():
         if variant["variables"].get("chatbot_model"):
             print(f"  model={variant['variables']['chatbot_model']}")
 
-        rendered = render_template(template_source, variant["variables"])
-        prompt = extract_system_prompt(rendered)
+        prompt = render_template(template_source, variant["variables"])
 
         with open(output_path, "w") as f:
             f.write(prompt + "\n")
