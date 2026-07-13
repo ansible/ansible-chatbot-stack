@@ -72,6 +72,10 @@ RUN echo -e "\
 " > /.llama/distributions/ansible-chatbot/ansible-chatbot-version-info.json
 ADD llama-stack/providers.d /.llama/providers.d
 
+# System prompt template and rendering tool
+ADD templates/ansible-chatbot-system-prompt.txt.j2 /.llama/templates/ansible-chatbot-system-prompt.txt.j2
+ADD scripts/render_system_prompt.py /.llama/scripts/render_system_prompt.py
+
 # Bootstrap
 ADD entrypoint.sh /.llama
 
