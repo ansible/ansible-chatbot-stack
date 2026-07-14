@@ -111,42 +111,49 @@ fi
 
 # Wait for MCP sidecar endpoints to be ready before starting lightspeed-stack.
 # On OCP, all containers in a pod start simultaneously. The MCP sidecars may not
-# be listening yet when lightspeed_stack.py tries to register MCP tool groups,
-# causing a startup crash. This block polls each MCP server port until it accepts
-# TCP connections, then proceeds. If sidecars don't come up in time, the chatbot
-# starts anyway in degraded mode (without MCP tools).
+# be fully initialized when lightspeed_stack.py tries to register MCP tool groups,
+# causing tool registration to fail silently (chatbot falls back to RAG instead
+# of using MCP tools). This block:
+#   1. Polls each MCP server's SSE endpoint over HTTP (not just TCP) until it
+#      returns a valid response, confirming the HTTP/SSE layer is up.
+#   2. Waits a stabilization period after all endpoints respond, giving the MCP
+#      servers time to finish internal tool registry initialization.
+# If sidecars don't come up in time, the chatbot starts in degraded mode.
 
 LIGHTSPEED_STACK_CONFIG="/.llama/distributions/ansible-chatbot/config/lightspeed-stack.yaml"
 MCP_WAIT_MAX_ATTEMPTS="${MCP_WAIT_MAX_ATTEMPTS:-30}"
 MCP_WAIT_INTERVAL="${MCP_WAIT_INTERVAL:-2}"
+MCP_STABILIZATION_DELAY="${MCP_STABILIZATION_DELAY:-5}"
 
-wait_for_port() {
-    local host="$1"
-    local port="$2"
-    local label="${host}:${port}"
+wait_for_mcp_http() {
+    local url="$1"
     local attempt=1
 
-    echo "Waiting for MCP endpoint ${label} ..."
+    echo "Waiting for MCP endpoint ${url} (HTTP) ..."
     while [[ $attempt -le $MCP_WAIT_MAX_ATTEMPTS ]]; do
         if python3 -c "
-import socket, sys
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s.settimeout(2)
+import http.client, sys, urllib.parse
+parsed = urllib.parse.urlparse('${url}')
+host = parsed.hostname
+port = parsed.port or 80
+path = parsed.path or '/'
 try:
-    s.connect(('${host}', ${port}))
-    s.close()
-    sys.exit(0)
+    conn = http.client.HTTPConnection(host, port, timeout=3)
+    conn.request('GET', path)
+    resp = conn.getresponse()
+    conn.close()
+    sys.exit(0 if resp.status == 200 else 1)
 except Exception:
     sys.exit(1)
 " 2>/dev/null; then
-            echo "MCP endpoint ${label} is ready (attempt ${attempt}/${MCP_WAIT_MAX_ATTEMPTS})"
+            echo "MCP endpoint ${url} responded HTTP 200 (attempt ${attempt}/${MCP_WAIT_MAX_ATTEMPTS})"
             return 0
         fi
-        echo "MCP endpoint ${label} not ready (attempt ${attempt}/${MCP_WAIT_MAX_ATTEMPTS}), retrying in ${MCP_WAIT_INTERVAL}s..."
+        echo "MCP endpoint ${url} not ready (attempt ${attempt}/${MCP_WAIT_MAX_ATTEMPTS}), retrying in ${MCP_WAIT_INTERVAL}s..."
         sleep "${MCP_WAIT_INTERVAL}"
         attempt=$((attempt + 1))
     done
-    echo "WARNING: MCP endpoint ${label} not ready after ${MCP_WAIT_MAX_ATTEMPTS} attempts ($(( MCP_WAIT_MAX_ATTEMPTS * MCP_WAIT_INTERVAL ))s). Starting in degraded mode."
+    echo "WARNING: MCP endpoint ${url} not ready after ${MCP_WAIT_MAX_ATTEMPTS} attempts ($(( MCP_WAIT_MAX_ATTEMPTS * MCP_WAIT_INTERVAL ))s). Starting in degraded mode."
     return 1
 }
 
@@ -155,22 +162,28 @@ if [[ "${MCP_WAIT_DISABLED:-false}" == "true" ]]; then
 elif [[ ! -f "${LIGHTSPEED_STACK_CONFIG}" ]]; then
     echo "Config file not found at ${LIGHTSPEED_STACK_CONFIG}, skipping MCP readiness check."
 else
-    MCP_ENDPOINTS=$(grep -E '^\s+url:\s' "${LIGHTSPEED_STACK_CONFIG}" 2>/dev/null \
-        | grep -oE 'https?://[^"'"'"' ]+' \
-        | sed -E 's|https?://||; s|/.*||')
+    MCP_URLS=$(grep -E '^\s+(url|uri):\s' "${LIGHTSPEED_STACK_CONFIG}" 2>/dev/null \
+        | grep -oE 'https?://[^"'"'"' ]+')
 
-    if [[ -n "${MCP_ENDPOINTS}" ]]; then
+    LLAMA_RUN_CONFIG=$(grep -oP 'library_client_config_path:\s*\K\S+' "${LIGHTSPEED_STACK_CONFIG}" 2>/dev/null)
+    if [[ -z "${MCP_URLS}" && -n "${LLAMA_RUN_CONFIG}" && -f "${LLAMA_RUN_CONFIG}" ]]; then
+        MCP_URLS=$(grep -E '^\s+(url|uri):\s' "${LLAMA_RUN_CONFIG}" 2>/dev/null \
+            | grep -oE 'https?://[^"'"'"' ]+')
+    fi
+
+    if [[ -n "${MCP_URLS}" ]]; then
         echo "MCP server endpoints detected, waiting for sidecar readiness..."
         MCP_ALL_READY=true
-        for endpoint in ${MCP_ENDPOINTS}; do
-            host="${endpoint%%:*}"
-            port="${endpoint##*:}"
-            if ! wait_for_port "${host}" "${port}"; then
+        for url in ${MCP_URLS}; do
+            if ! wait_for_mcp_http "${url}"; then
                 MCP_ALL_READY=false
             fi
         done
         if [[ "${MCP_ALL_READY}" == "true" ]]; then
-            echo "All MCP endpoints are ready."
+            echo "All MCP endpoints responding over HTTP."
+            echo "Waiting ${MCP_STABILIZATION_DELAY}s for MCP tool registration to complete..."
+            sleep "${MCP_STABILIZATION_DELAY}"
+            echo "Stabilization complete. Starting chatbot with full MCP support."
         else
             echo "WARNING: Not all MCP endpoints are ready. Chatbot will start without full MCP support."
         fi
