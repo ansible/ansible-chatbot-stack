@@ -120,7 +120,7 @@ if [[ -f "${SYSTEM_PROMPT_PATH}" ]]; then
 else
     echo "No system prompt found. Generating from template..."
     mkdir -p "$(dirname "${SYSTEM_PROMPT_PATH}")"
-    python3 /.llama/scripts/render_system_prompt.py \
+    ${PYTHON:-python3} /.llama/scripts/render_system_prompt.py \
         --template "${SYSTEM_PROMPT_TEMPLATE}" \
         --output "${SYSTEM_PROMPT_PATH}"
     if [[ $? -ne 0 ]]; then
