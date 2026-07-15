@@ -25,6 +25,22 @@ import jinja2
 DEFAULT_PRODUCT_NAME = "Automation Intelligent Assistant"
 DEFAULT_PROVIDER_TYPE = "rhoai_vllm"
 
+ALLOWED_BASE_DIR = Path("/.llama")
+
+
+def _validate_path(path: Path, label: str) -> Path:
+    """Resolve *path* and, inside the container, ensure it stays under ALLOWED_BASE_DIR."""
+    resolved = path.resolve()
+    if ALLOWED_BASE_DIR.exists():
+        try:
+            resolved.relative_to(ALLOWED_BASE_DIR.resolve())
+        except ValueError:
+            raise SystemExit(
+                f"ERROR: {label} path escapes allowed directory "
+                f"({ALLOWED_BASE_DIR}): {resolved}"
+            )
+    return resolved
+
 
 def build_context() -> dict:
     """Build Jinja template context from environment variables."""
@@ -48,6 +64,7 @@ def render_template(template_path: Path, context: dict) -> str:
     """Load and render the Jinja template with the given context."""
     env = jinja2.Environment(
         loader=jinja2.FileSystemLoader(str(template_path.parent)),
+        autoescape=jinja2.select_autoescape(default_for_string=False),
         undefined=jinja2.Undefined,
         trim_blocks=True,
         lstrip_blocks=True,
@@ -73,8 +90,8 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    template_path = Path(args.template)
-    output_path = Path(args.output)
+    template_path = _validate_path(Path(args.template), "template")
+    output_path = _validate_path(Path(args.output), "output")
 
     if not template_path.exists():
         print(f"ERROR: Template not found: {template_path}", file=sys.stderr)

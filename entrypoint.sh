@@ -124,7 +124,7 @@ else
         --template "${SYSTEM_PROMPT_TEMPLATE}" \
         --output "${SYSTEM_PROMPT_PATH}"
     if [[ $? -ne 0 ]]; then
-        echo "ERROR: Failed to generate system prompt from template."
+        echo "ERROR: Failed to generate system prompt from template." >&2
         exit 1
     fi
 fi
