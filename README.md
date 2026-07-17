@@ -202,6 +202,17 @@ Using the [`gemini` remote inference provider](https://llama-stack.readthedocs.i
 ```
 
 
+## Appendix - Generating system prompt files
+
+The system prompt files (`ansible-chatbot-system-prompt.txt` and `ansible-chatbot-system-prompt-granite-compat.txt`)
+are generated from the upstream [operator template](https://github.com/ansible/ansible-ai-connect-operator/blob/main/roles/chatbot/templates/chatbot.configmap_system_prompt.yaml.j2).
+
+To regenerate them after the upstream template changes:
+
+```shell
+    python3 scripts/generate_system_prompts.py
+```
+
 ## Appendix - Host clean-up
 
 If you have the need for re-building images, apply the following clean-ups right before:
