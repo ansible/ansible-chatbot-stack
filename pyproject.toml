@@ -11,7 +11,7 @@ dependencies = [
     "faiss-cpu==1.12",
     "lightspeed-stack-providers==0.4.3",
     "litellm==1.84.0", # Bumped for CVE-2026-49468 (also relaxes aiohttp pin for CVE-2026-34993)
-    "mcp==1.26.0",
+    "mcp==1.28.1",
     "pillow==12.3.0", # Transient dep pinned to handle CVE (CVE-2026-59197, CVE-2026-54058, CVE-2026-54060, CVE-2026-55380, CVE-2026-55379)
     "python-dotenv>=1.2.2", # Transient dep pinned to handle CVE
     "pyasn1==0.6.3",
