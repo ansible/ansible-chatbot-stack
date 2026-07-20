@@ -62,6 +62,7 @@ ENV LLAMA_STACK_CONFIG_DIR=/.llama/data
 
 # Data and configuration
 RUN mkdir -p /.llama/distributions/ansible-chatbot
+RUN mkdir -p /.llama/distributions/ansible-chatbot/system-prompts
 RUN mkdir -p /.llama/data/distributions/ansible-chatbot
 RUN echo -e "\
 {\n\
