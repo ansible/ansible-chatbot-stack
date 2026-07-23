@@ -8,7 +8,7 @@ dependencies = [
     "aiohttp==3.14.0", # Transient dep pinned to handle CVE (CVE-2026-34993)
     "cryptography==46.0.7", # Transient dep pinned to handle CVE
     "dumb-init>=1.2.5.post1",
-    "faiss-cpu==1.12",
+    "faiss-cpu==1.14.3",
     "lightspeed-stack-providers==0.4.3",
     "litellm==1.84.0", # Bumped for CVE-2026-49468 (also relaxes aiohttp pin for CVE-2026-34993)
     "mcp==1.26.0",
