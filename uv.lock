@@ -201,7 +201,7 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "aiohttp", specifier = "==3.14.3" },
-    { name = "cryptography", specifier = "==50.0.0" },
+    { name = "cryptography", specifier = ">=50.0.0,<51" },
     { name = "dumb-init", specifier = ">=1.2.5.post1" },
     { name = "faiss-cpu", specifier = "==1.12" },
     { name = "joserfc", specifier = ">=1.6.7" },
