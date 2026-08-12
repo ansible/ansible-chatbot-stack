@@ -6,7 +6,7 @@ ARG GIT_COMMIT=git-commit-not-defined
 # ======================================================
 # Transient image to construct Python venv
 # ------------------------------------------------------
-FROM quay.io/lightspeed-core/lightspeed-stack:0.4.3.1 AS builder
+FROM quay.io/lightspeed-core/lightspeed-stack:0.5.3 AS builder
 
 ARG APP_ROOT=/app-root
 WORKDIR /app-root
@@ -27,6 +27,10 @@ COPY pyproject.toml uv.lock LICENSE.md README.md ./
 RUN uv export --no-hashes --no-header --no-annotate --no-dev --format requirements.txt > requirements.txt
 
 RUN uv pip install -r requirements.txt
+
+# Download external providers
+COPY scripts/download_agent_yaml.sh ./
+RUN bash download_agent_yaml.sh
 # ======================================================
 
 # ======================================================
@@ -70,6 +74,10 @@ RUN echo -e "\
   \"gitCommit\": \"${GIT_COMMIT}\" \n\
 }\n\
 " > /.llama/distributions/ansible-chatbot/ansible-chatbot-version-info.json
+
+# Copy downloaded providers from builder
+COPY --from=builder --chown=1001:1001 /app-root/llama-stack/providers.d /.llama/providers.d
+# Also copy any pre-packaged providers from the build context
 ADD llama-stack/providers.d /.llama/providers.d
 
 # Bootstrap
