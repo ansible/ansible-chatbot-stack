@@ -109,4 +109,24 @@ else
     echo "BYOK provider vector DB ID file not found: ${BYOK_PROVIDER_VECTOR_DB_ID_FILE_PATH}"
 fi
 
+# --- System prompt generation ---
+# If no system prompt file exists (e.g. not mounted via ConfigMap by the
+# operator), render one from the bundled Jinja template using env vars.
+SYSTEM_PROMPT_PATH="/.llama/distributions/ansible-chatbot/system-prompts/default.txt"
+SYSTEM_PROMPT_TEMPLATE="/.llama/templates/ansible-chatbot-system-prompt.txt.j2"
+
+if [[ -f "${SYSTEM_PROMPT_PATH}" ]]; then
+    echo "System prompt found at ${SYSTEM_PROMPT_PATH}, using as-is."
+else
+    echo "No system prompt found. Generating from template..."
+    mkdir -p "$(dirname "${SYSTEM_PROMPT_PATH}")"
+    ${PYTHON:-python3} /.llama/scripts/render_system_prompt.py \
+        --template "${SYSTEM_PROMPT_TEMPLATE}" \
+        --output "${SYSTEM_PROMPT_PATH}"
+    if [[ $? -ne 0 ]]; then
+        echo "ERROR: Failed to generate system prompt from template." >&2
+        exit 1
+    fi
+fi
+
 ${PYTHON_CMD} /app-root/src/lightspeed_stack.py --config /.llama/distributions/ansible-chatbot/config/lightspeed-stack.yaml
