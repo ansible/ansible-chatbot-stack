@@ -59,7 +59,11 @@ help:
 	@echo "  update-lock       - Update uv.lock file"
 	@echo ""
 	@echo "Test targets:"
-	@echo "  test              - Run all tests (uses mock OpenAI server)"
+	@echo "  test              - Run all mock tests (no real LLM required)"
+	@echo "  test-sanity       - Run all sanity tests (real LLMs, skip if creds absent)"
+	@echo "  test-sanity-granite - Run Granite/vLLM sanity tests"
+	@echo "  test-sanity-openai  - Run real OpenAI sanity tests"
+	@echo "  test-sanity-azure   - Run Azure OpenAI sanity tests"
 	@echo ""
 	@echo "Required Environment variables:"
 	@echo "  ANSIBLE_CHATBOT_VERSION                - Version tag for the image (default: $(ANSIBLE_CHATBOT_VERSION))"
@@ -282,4 +286,20 @@ update-lock:
 
 test:
 	@echo "Running all tests (mock OpenAI server)..."
-	uv run --group test pytest tests/ -v
+	uv run --group test pytest tests/ -v --ignore=tests/sanity
+
+test-sanity:
+	@echo "Running sanity tests (real LLMs — set provider env vars before running)..."
+	uv run --group test pytest tests/sanity/ -v
+
+test-sanity-granite:
+	@echo "Running Granite sanity tests (requires VLLM_URL, VLLM_API_TOKEN, INFERENCE_MODEL)..."
+	uv run --group test pytest tests/sanity/test_granite.py -v
+
+test-sanity-openai:
+	@echo "Running OpenAI sanity tests (requires OPENAI_API_KEY, OPENAI_INFERENCE_MODEL)..."
+	uv run --group test pytest tests/sanity/test_openai_real.py -v
+
+test-sanity-azure:
+	@echo "Running Azure OpenAI sanity tests (requires AZURE_OPENAI_BASE_URL, AZURE_OPENAI_API_KEY, AZURE_OPENAI_INFERENCE_MODEL)..."
+	uv run --group test pytest tests/sanity/test_azure.py -v

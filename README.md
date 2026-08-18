@@ -149,6 +149,70 @@ Runs basic tests against the local container.
     make run-test
 ```
 
+## Sanity tests
+
+End-to-end sanity tests exercise the full chatbot stack against real LLM backends.
+Unlike the basic tests, these make actual inference calls — no mock server.
+Tests for a given provider are skipped automatically when the required environment variables are not set.
+
+### Supported providers
+
+| Provider | Make target | Required environment variables |
+|----------|-------------|-------------------------------|
+| Granite (vLLM) | `make test-sanity-granite` | `VLLM_URL`, `VLLM_API_TOKEN`, `INFERENCE_MODEL` |
+| OpenAI | `make test-sanity-openai` | `OPENAI_API_KEY`, `OPENAI_INFERENCE_MODEL` |
+| Azure OpenAI | `make test-sanity-azure` | `AZURE_OPENAI_BASE_URL`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_INFERENCE_MODEL` |
+
+### Prerequisites
+
+```shell
+    make setup-test   # downloads embeddings model and creates vector DB
+    make build        # builds the container image (ANSIBLE_CHATBOT_VERSION required)
+```
+
+### Running sanity tests
+
+Run all providers in sequence (providers without credentials are skipped):
+
+```shell
+    make test-sanity
+```
+
+Run a single provider:
+
+```shell
+    # Granite (vLLM)
+    export VLLM_URL=<YOUR_VLLM_URL>
+    export VLLM_API_TOKEN=<YOUR_VLLM_API_TOKEN>
+    export INFERENCE_MODEL=<YOUR_MODEL_NAME>
+    make test-sanity-granite
+
+    # OpenAI
+    export OPENAI_API_KEY=<YOUR_OPENAI_API_KEY>
+    export OPENAI_INFERENCE_MODEL=<YOUR_MODEL_NAME>   # e.g. gpt-4o-mini
+    make test-sanity-openai
+
+    # Azure OpenAI
+    export AZURE_OPENAI_BASE_URL=<YOUR_AZURE_ENDPOINT>   # e.g. https://<resource>.openai.azure.com
+    export AZURE_OPENAI_API_KEY=<YOUR_AZURE_API_KEY>
+    export AZURE_OPENAI_INFERENCE_MODEL=<YOUR_DEPLOYMENT_NAME>
+    make test-sanity-azure
+```
+
+### CI
+
+The sanity tests run as a separate GitHub Actions workflow (`.github/workflows/test-sanity.yml`).
+The workflow is triggered manually via `workflow_dispatch` from the Actions UI.
+Provider credentials are stored as repository secrets with a `SANITY_` prefix:
+
+| Secret | Provider |
+|--------|----------|
+| `SANITY_VLLM_URL`, `SANITY_VLLM_API_TOKEN`, `SANITY_INFERENCE_MODEL` | Granite (vLLM) |
+| `SANITY_OPENAI_API_KEY`, `SANITY_OPENAI_INFERENCE_MODEL` | OpenAI |
+| `SANITY_AZURE_OPENAI_BASE_URL`, `SANITY_AZURE_OPENAI_API_KEY`, `SANITY_AZURE_OPENAI_INFERENCE_MODEL` | Azure OpenAI |
+
+Providers whose secrets are absent are skipped rather than failed.
+
 ## AAP quality evaluations
 
 AAP Chatbot Quality evaluations available:

@@ -1,0 +1,125 @@
+name: Sanity Tests
+
+on:
+  workflow_dispatch:
+#  schedule:
+#    # Nightly at 03:17 UTC
+#    - cron: '17 3 * * *'
+
+jobs:
+  test-sanity:
+    runs-on: ubuntu-latest
+
+    # Only run for ansible organization
+    if: github.repository_owner == 'ansible'
+
+    permissions:
+      contents: read
+
+    env:
+      ANSIBLE_CHATBOT_VERSION: 'test'
+      CONTAINER_RUNTIME: 'podman'
+      SERVER_STARTUP_TIMEOUT: '600'
+      UV_CACHE_DIR: /tmp/.uv-cache
+      HF_HOME: /tmp/.cache/huggingface
+      # Granite (vLLM) — tests skip if these are empty
+      VLLM_URL: ${{ secrets.SANITY_VLLM_URL }}
+      VLLM_API_TOKEN: ${{ secrets.SANITY_VLLM_API_TOKEN }}
+      INFERENCE_MODEL: ${{ secrets.SANITY_INFERENCE_MODEL }}
+      # OpenAI — tests skip if these are empty
+      OPENAI_API_KEY: ${{ secrets.SANITY_OPENAI_API_KEY }}
+      OPENAI_INFERENCE_MODEL: ${{ secrets.SANITY_OPENAI_INFERENCE_MODEL }}
+      # Azure OpenAI — tests skip if these are empty
+      AZURE_OPENAI_BASE_URL: ${{ secrets.SANITY_AZURE_OPENAI_BASE_URL }}
+      AZURE_OPENAI_API_KEY: ${{ secrets.SANITY_AZURE_OPENAI_API_KEY }}
+      AZURE_OPENAI_INFERENCE_MODEL: ${{ secrets.SANITY_AZURE_OPENAI_INFERENCE_MODEL }}
+
+    steps:
+      - name: Free up disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
+
+      - name: Cache uv dependencies
+        uses: actions/cache@v6
+        with:
+          path: ${{ env.UV_CACHE_DIR }}
+          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            uv-${{ runner.os }}-
+
+      - name: Cache HuggingFace models
+        uses: actions/cache@v6
+        with:
+          path: ${{ env.HF_HOME }}
+          key: hf-models-${{ runner.os }}-all-MiniLM-L6-v2
+          restore-keys: |
+            hf-models-${{ runner.os }}-
+
+      - name: Setup test data
+        run: make setup-test
+
+      - name: Build container image with Buildah
+        id: build-image
+        uses: redhat-actions/buildah-build@v3
+        with:
+          image: ansible-chatbot-stack
+          tags: test
+          containerfiles: |
+            ./Containerfile
+          build-args: |
+            ANSIBLE_CHATBOT_VERSION=test
+
+      - name: Verify container image
+        run: podman images ${{ steps.build-image.outputs.image-with-tag }}
+
+      - name: Run sanity tests
+        run: uv run --group test pytest tests/sanity/ -v -s --tb=long
+
+      - name: Upload test artifacts (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sanity-test-logs
+          path: |
+            .pytest_cache/
+          retention-days: 3
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Sanity Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Container Image**: ${{ steps.build-image.outputs.image-with-tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Trigger**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Providers" >> $GITHUB_STEP_SUMMARY
+          echo "| Provider | Credentials set |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|----------------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Granite (vLLM) | ${{ secrets.SANITY_VLLM_URL != '' && '✅' || '⚠️ skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| OpenAI | ${{ secrets.SANITY_OPENAI_API_KEY != '' && '✅' || '⚠️ skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Azure OpenAI | ${{ secrets.SANITY_AZURE_OPENAI_BASE_URL != '' && '✅' || '⚠️ skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ All sanity tests passed!" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Some tests failed. Check the logs above for details." >> $GITHUB_STEP_SUMMARY
+          fi
