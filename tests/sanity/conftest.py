@@ -35,7 +35,7 @@ def _check_required_vars(var_names):
         pytest.skip(f"Missing required environment variables: {', '.join(missing)}")
 
 
-def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides):  # noqa: cognitive-complexity
+def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides):
     """
     Start the chatbot container for a given provider config.
 
@@ -96,7 +96,7 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides)
         except Exception:
             pass
 
-    cmd = [  # NOSONAR — operator-controlled args, no external user input
+    cmd = [
         container_runtime, "run",
         "--rm",
         "--name", container_name,
