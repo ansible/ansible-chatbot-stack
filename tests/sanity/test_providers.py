@@ -1,16 +1,19 @@
 """
-Sanity tests for ansible-chatbot-stack with the in-house Granite LLM (vLLM).
+End-to-end sanity tests for ansible-chatbot-stack against real LLM providers.
 
-These tests use a real vLLM inference endpoint. Required environment variables:
-  VLLM_URL            - Base URL of the vLLM server
-  VLLM_API_TOKEN      - API token for the vLLM server
-  INFERENCE_MODEL     - Model name served by vLLM (e.g. ibm-granite/granite-3.3-8b-instruct)
+Tests run for each provider configured via the provider_setup fixture:
+  - Granite (vLLM)  — requires VLLM_URL, VLLM_API_TOKEN, INFERENCE_MODEL
+  - OpenAI          — requires OPENAI_API_KEY, OPENAI_INFERENCE_MODEL
+  - Azure OpenAI    — requires AZURE_OPENAI_BASE_URL, AZURE_OPENAI_API_KEY,
+                               AZURE_OPENAI_INFERENCE_MODEL
 
-Tests are automatically skipped when any of the above variables are not set.
+A provider is skipped automatically when its required variables are not set.
 
 Examples:
-    make test-sanity-granite
-    pytest tests/sanity/test_granite.py -v
+    make test-sanity                  # all providers
+    make test-sanity-granite          # Granite only
+    make test-sanity-openai           # OpenAI only
+    make test-sanity-azure            # Azure only
 """
 
 import json
@@ -19,12 +22,10 @@ import pytest
 import requests
 
 
-@pytest.mark.granite
-@pytest.mark.usefixtures("granite_server")
-class TestChatbotSanityGranite:
-    """Sanity tests for the Granite (vLLM) inference provider."""
+class TestChatbotSanity:
+    """Sanity tests executed once per configured LLM provider."""
 
-    def test_server_health(self, base_url):
+    def test_server_health(self, base_url, provider_setup):
         response = requests.get(f"{base_url}/v1/config", timeout=10)
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
@@ -32,7 +33,7 @@ class TestChatbotSanityGranite:
         assert config_data is not None
         assert len(config_data) > 0
 
-    def test_models_endpoint(self, base_url):
+    def test_models_endpoint(self, base_url, provider_setup):
         response = requests.get(f"{base_url}/v1/models", timeout=10)
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
@@ -40,11 +41,11 @@ class TestChatbotSanityGranite:
         assert models_data is not None
         assert isinstance(models_data, (list, dict))
 
-    def test_simple_query_what_is_aap(self, base_url, granite_config):
+    def test_simple_query_what_is_aap(self, base_url, provider_setup):
         query_data = {
             "query": "What is AAP?",
-            "model": granite_config["model"],
-            "provider": granite_config["provider"],
+            "model": provider_setup["model"],
+            "provider": provider_setup["provider"],
         }
 
         response = requests.post(
@@ -75,11 +76,11 @@ class TestChatbotSanityGranite:
             for kw in ["ansible automation platform", "aap", "ansible", "automation"]
         ), f"Response should mention Ansible or AAP. Got: {response_text[:200]}"
 
-    def test_streaming_query_what_is_aap(self, base_url, granite_config):
+    def test_streaming_query_what_is_aap(self, base_url, provider_setup):
         query_data = {
             "query": "What is AAP?",
-            "model": granite_config["model"],
-            "provider": granite_config["provider"],
+            "model": provider_setup["model"],
+            "provider": provider_setup["provider"],
         }
 
         response = requests.post(
@@ -116,11 +117,11 @@ class TestChatbotSanityGranite:
             for kw in ["ansible automation platform", "aap", "ansible", "automation"]
         ), f"Response should mention Ansible or AAP. Got: {full_response[:200]}"
 
-    def test_query_with_empty_query_returns_error(self, base_url, granite_config):
+    def test_query_with_empty_query_returns_error(self, base_url, provider_setup):
         query_data = {
             "query": "",
-            "model": granite_config["model"],
-            "provider": granite_config["provider"],
+            "model": provider_setup["model"],
+            "provider": provider_setup["provider"],
         }
 
         response = requests.post(
@@ -134,11 +135,11 @@ class TestChatbotSanityGranite:
             f"Expected 200, 400, or 422, got {response.status_code}"
         )
 
-    def test_query_response_structure(self, base_url, granite_config):
+    def test_query_response_structure(self, base_url, provider_setup):
         query_data = {
             "query": "What is Ansible?",
-            "model": granite_config["model"],
-            "provider": granite_config["provider"],
+            "model": provider_setup["model"],
+            "provider": provider_setup["provider"],
         }
 
         response = requests.post(

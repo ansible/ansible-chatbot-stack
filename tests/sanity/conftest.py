@@ -1,9 +1,9 @@
 """
 Pytest fixtures for sanity tests against real LLM providers.
 
-Each provider fixture (granite_server, openai_real_server, azure_server) manages
-the full container lifecycle. Tests are skipped automatically when the required
-environment variables for a provider are not set.
+The parametrized provider_setup fixture manages the full container lifecycle
+for each provider and yields the provider config (model, provider ID).
+Tests are skipped automatically when required environment variables are not set.
 """
 
 import os
@@ -36,22 +36,13 @@ def _check_required_vars(var_names):
         pytest.skip(f"Missing required environment variables: {', '.join(missing)}")
 
 
-def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides):
+def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides):  # noqa: cognitive-complexity
     """
     Start the chatbot container for a given provider config.
 
     Returns (process, container_runtime, container_name) for cleanup.
     If a server is already running on port 8322, skips container startup.
     """
-    env = os.environ.copy()
-    env.update(env_overrides)
-
-    # Check prerequisites
-    if not Path("./embeddings_model").exists():
-        pytest.fail("embeddings_model directory not found — run 'make setup-test' first")
-    if not Path("./vector_db/aap_faiss_store.db").exists():
-        pytest.fail("vector_db/aap_faiss_store.db not found — run 'make setup-test' first")
-
     # Check if server is already running
     try:
         resp = requests.get(f"{BASE_URL}/v1/config", timeout=2)
@@ -60,6 +51,12 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides)
             return None, None, None
     except requests.exceptions.RequestException:
         pass
+
+    # Check prerequisites
+    if not Path("./embeddings_model").exists():
+        pytest.fail("embeddings_model directory not found — run 'make setup-test' first")
+    if not Path("./vector_db/aap_faiss_store.db").exists():
+        pytest.fail("vector_db/aap_faiss_store.db not found — run 'make setup-test' first")
 
     # Resolve container runtime — allowlist prevents arbitrary command injection
     _ALLOWED_RUNTIMES = ("podman", "docker")
@@ -75,7 +72,7 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides)
     print(f"\n[✓] Using container runtime: {container_runtime}")
 
     # Resolve container image — validate tag to prevent tainted input reaching subprocess
-    image_tag = env.get("ANSIBLE_CHATBOT_VERSION", "latest")
+    image_tag = os.environ.get("ANSIBLE_CHATBOT_VERSION", "latest")
     if not re.match(r"^[a-zA-Z0-9][a-zA-Z0-9._\-]*$", image_tag):
         pytest.fail(f"Invalid ANSIBLE_CHATBOT_VERSION tag: {image_tag!r}")
     full_image = f"ansible-chatbot-stack:{image_tag}"
@@ -86,14 +83,14 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides)
     )
     if check_image.returncode != 0:
         print(f"[⚙] Image '{full_image}' not found — building with 'make build'...")
-        build = subprocess.run(["make", "build"], env=env, capture_output=False)
+        build = subprocess.run(["make", "build"], capture_output=False)
         if build.returncode != 0:
             pytest.fail("Failed to build container image")
 
     container_name = f"ansible-chatbot-sanity-{os.getpid()}"
     selinux_flag = ":z"
 
-    provider_vector_db_id = env.get("PROVIDER_VECTOR_DB_ID", "aap-product-docs-2_6")
+    provider_vector_db_id = os.environ.get("PROVIDER_VECTOR_DB_ID", "aap-product-docs-2_6")
     vid_file = Path("./vector_db/provider_vector_db_id.ind")
     if vid_file.exists() and not os.environ.get("PROVIDER_VECTOR_DB_ID"):
         try:
@@ -116,10 +113,9 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides)
         "-v", f"{Path.cwd()}/llama-stack/providers.d:/.llama/providers.d{selinux_flag}",
         "--env", f"PROVIDER_VECTOR_DB_ID={provider_vector_db_id}",
         "--env", "PYTHONUNBUFFERED=1",
-        "--env", f"LOG_LEVEL={env.get('LOG_LEVEL', 'INFO')}",
+        "--env", f"LOG_LEVEL={os.environ.get('LOG_LEVEL', 'INFO')}",
     ]
 
-    # Pass provider-specific env vars into the container
     for key, val in env_overrides.items():
         cmd += ["--env", f"{key}={val}"]
 
@@ -198,90 +194,66 @@ def _stop_sanity_server(process, container_runtime, container_name):
 
 
 # ---------------------------------------------------------------------------
-# Provider fixtures
+# Parametrized provider fixture
 # ---------------------------------------------------------------------------
+
+@pytest.fixture(
+    params=[
+        pytest.param("granite", marks=pytest.mark.granite),
+        pytest.param("openai", marks=pytest.mark.openai_live),
+        pytest.param("azure", marks=pytest.mark.azure),
+    ],
+    scope="module",
+)
+def provider_setup(request):
+    """
+    Start the chatbot server for the given provider and yield its config.
+
+    Yields a dict with keys 'model' and 'provider' for use in test assertions.
+    Skips automatically when required environment variables are not set.
+    """
+    provider = request.param
+
+    if provider == "granite":
+        _check_required_vars(_GRANITE_REQUIRED)
+        env_overrides = {
+            "VLLM_URL": os.environ["VLLM_URL"],
+            "VLLM_API_TOKEN": os.environ["VLLM_API_TOKEN"],
+            "INFERENCE_MODEL": os.environ["INFERENCE_MODEL"],
+        }
+        if os.environ.get("VLLM_MAX_TOKENS"):
+            env_overrides["VLLM_MAX_TOKENS"] = os.environ["VLLM_MAX_TOKENS"]
+        if os.environ.get("VLLM_TLS_VERIFY"):
+            env_overrides["VLLM_TLS_VERIFY"] = os.environ["VLLM_TLS_VERIFY"]
+        run_config = str(_SANITY_DIR / "granite-chatbot-run.yaml")
+        config = {"model": f"granite/{os.environ['INFERENCE_MODEL']}", "provider": "granite"}
+
+    elif provider == "openai":
+        _check_required_vars(_OPENAI_REQUIRED)
+        env_overrides = {
+            "OPENAI_API_KEY": os.environ["OPENAI_API_KEY"],
+            "OPENAI_INFERENCE_MODEL": os.environ["OPENAI_INFERENCE_MODEL"],
+        }
+        if os.environ.get("OPENAI_BASE_URL"):
+            env_overrides["OPENAI_BASE_URL"] = os.environ["OPENAI_BASE_URL"]
+        run_config = str(_SANITY_DIR / "openai-chatbot-run.yaml")
+        config = {"model": os.environ["OPENAI_INFERENCE_MODEL"], "provider": "openai"}
+
+    else:  # azure
+        _check_required_vars(_AZURE_REQUIRED)
+        env_overrides = {
+            "AZURE_OPENAI_BASE_URL": os.environ["AZURE_OPENAI_BASE_URL"],
+            "AZURE_OPENAI_API_KEY": os.environ["AZURE_OPENAI_API_KEY"],
+            "AZURE_OPENAI_INFERENCE_MODEL": os.environ["AZURE_OPENAI_INFERENCE_MODEL"],
+        }
+        run_config = str(_SANITY_DIR / "azure-chatbot-run.yaml")
+        config = {"model": os.environ["AZURE_OPENAI_INFERENCE_MODEL"], "provider": "openai_azure"}
+
+    process, runtime, name = _start_sanity_server(run_config, _LIGHTSPEED_STACK_CONFIG, env_overrides)
+    yield config
+    _stop_sanity_server(process, runtime, name)
+
 
 @pytest.fixture(scope="session")
 def base_url():
     return BASE_URL
-
-
-@pytest.fixture(scope="module")
-def granite_server():
-    _check_required_vars(_GRANITE_REQUIRED)
-
-    env_overrides = {
-        "VLLM_URL": os.environ["VLLM_URL"],
-        "VLLM_API_TOKEN": os.environ["VLLM_API_TOKEN"],
-        "INFERENCE_MODEL": os.environ["INFERENCE_MODEL"],
-    }
-    if os.environ.get("VLLM_MAX_TOKENS"):
-        env_overrides["VLLM_MAX_TOKENS"] = os.environ["VLLM_MAX_TOKENS"]
-    if os.environ.get("VLLM_TLS_VERIFY"):
-        env_overrides["VLLM_TLS_VERIFY"] = os.environ["VLLM_TLS_VERIFY"]
-
-    run_config = str(_SANITY_DIR / "granite-chatbot-run.yaml")
-    ls_config = _LIGHTSPEED_STACK_CONFIG
-
-    process, runtime, name = _start_sanity_server(run_config, ls_config, env_overrides)
-    yield True
-    _stop_sanity_server(process, runtime, name)
-
-
-@pytest.fixture(scope="session")
-def granite_config():
-    model = os.environ.get("INFERENCE_MODEL", "")
-    return {"model": f"granite/{model}", "provider": "granite"}
-
-
-@pytest.fixture(scope="module")
-def openai_real_server():
-    _check_required_vars(_OPENAI_REQUIRED)
-
-    env_overrides = {
-        "OPENAI_API_KEY": os.environ["OPENAI_API_KEY"],
-        "OPENAI_INFERENCE_MODEL": os.environ["OPENAI_INFERENCE_MODEL"],
-    }
-    if os.environ.get("OPENAI_BASE_URL"):
-        env_overrides["OPENAI_BASE_URL"] = os.environ["OPENAI_BASE_URL"]
-
-    run_config = str(_SANITY_DIR / "openai-chatbot-run.yaml")
-    ls_config = _LIGHTSPEED_STACK_CONFIG
-
-    process, runtime, name = _start_sanity_server(run_config, ls_config, env_overrides)
-    yield True
-    _stop_sanity_server(process, runtime, name)
-
-
-@pytest.fixture(scope="session")
-def openai_real_config():
-    return {
-        "model": os.environ.get("OPENAI_INFERENCE_MODEL", "gpt-4o-mini"),
-        "provider": "openai",
-    }
-
-
-@pytest.fixture(scope="module")
-def azure_server():
-    _check_required_vars(_AZURE_REQUIRED)
-
-    env_overrides = {
-        "AZURE_OPENAI_BASE_URL": os.environ["AZURE_OPENAI_BASE_URL"],
-        "AZURE_OPENAI_API_KEY": os.environ["AZURE_OPENAI_API_KEY"],
-        "AZURE_OPENAI_INFERENCE_MODEL": os.environ["AZURE_OPENAI_INFERENCE_MODEL"],
-    }
-
-    run_config = str(_SANITY_DIR / "azure-chatbot-run.yaml")
-    ls_config = _LIGHTSPEED_STACK_CONFIG
-
-    process, runtime, name = _start_sanity_server(run_config, ls_config, env_overrides)
-    yield True
-    _stop_sanity_server(process, runtime, name)
-
-
-@pytest.fixture(scope="session")
-def azure_config():
-    return {
-        "model": os.environ.get("AZURE_OPENAI_INFERENCE_MODEL", ""),
-        "provider": "openai_azure",
-    }

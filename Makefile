@@ -294,12 +294,12 @@ test-sanity:
 
 test-sanity-granite:
 	@echo "Running Granite sanity tests (requires VLLM_URL, VLLM_API_TOKEN, INFERENCE_MODEL)..."
-	uv run --group test pytest tests/sanity/test_granite.py -v
+	uv run --frozen --group test pytest tests/sanity/ -v -m granite
 
 test-sanity-openai:
 	@echo "Running OpenAI sanity tests (requires OPENAI_API_KEY, OPENAI_INFERENCE_MODEL)..."
-	uv run --group test pytest tests/sanity/test_openai_real.py -v
+	uv run --frozen --group test pytest tests/sanity/ -v -m openai_live
 
 test-sanity-azure:
 	@echo "Running Azure OpenAI sanity tests (requires AZURE_OPENAI_BASE_URL, AZURE_OPENAI_API_KEY, AZURE_OPENAI_INFERENCE_MODEL)..."
-	uv run --group test pytest tests/sanity/test_azure.py -v
+	uv run --frozen --group test pytest tests/sanity/ -v -m azure
