@@ -7,6 +7,7 @@ environment variables for a provider are not set.
 """
 
 import os
+import re
 import sys
 import shutil
 import subprocess
@@ -73,8 +74,10 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides)
 
     print(f"\n[✓] Using container runtime: {container_runtime}")
 
-    # Resolve container image
+    # Resolve container image — validate tag to prevent tainted input reaching subprocess
     image_tag = env.get("ANSIBLE_CHATBOT_VERSION", "latest")
+    if not re.match(r"^[a-zA-Z0-9][a-zA-Z0-9._\-]*$", image_tag):
+        pytest.fail(f"Invalid ANSIBLE_CHATBOT_VERSION tag: {image_tag!r}")
     full_image = f"ansible-chatbot-stack:{image_tag}"
 
     check_image = subprocess.run(
