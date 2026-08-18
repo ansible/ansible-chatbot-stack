@@ -142,7 +142,6 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides)
     print(f"[⚙] Starting container: {container_name}")
     process = subprocess.Popen(
         cmd,
-        env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
