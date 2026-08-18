@@ -15,4 +15,4 @@ images:
   newTag: 0.9.202608161225
 - name: ansible-mcp-lightspeed
   newName: quay.io/ansible/ansible-mcp-lightspeed
-  newTag: 0.9.202608161225
+  newTag: 0.9.202608180042
