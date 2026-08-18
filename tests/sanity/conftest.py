@@ -60,10 +60,12 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides)
     except requests.exceptions.RequestException:
         pass
 
-    # Resolve container runtime
-    container_runtime = os.environ.get("CONTAINER_RUNTIME")
-    if container_runtime:
-        container_runtime = shutil.which(container_runtime)
+    # Resolve container runtime — allowlist prevents arbitrary command injection
+    _ALLOWED_RUNTIMES = ("podman", "docker")
+    requested = os.environ.get("CONTAINER_RUNTIME", "")
+    if requested and requested not in _ALLOWED_RUNTIMES:
+        pytest.fail(f"CONTAINER_RUNTIME must be one of {_ALLOWED_RUNTIMES}, got: {requested!r}")
+    container_runtime = shutil.which(requested) if requested else None
     if not container_runtime:
         container_runtime = shutil.which("podman") or shutil.which("docker")
     if not container_runtime:
