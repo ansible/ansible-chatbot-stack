@@ -82,7 +82,7 @@ jobs:
         run: podman images ${{ steps.build-image.outputs.image-with-tag }}
 
       - name: Run integration tests
-        run: uv run --group test pytest tests/ -v -s --tb=long
+        run: uv run --frozen --group test pytest tests/ -v -s --tb=long
 
       # Generate minimal coverage report for Codecov onboarding
       # This ensures the repository appears as "onboarded" in Codecov dashboard
