@@ -36,7 +36,7 @@ jobs:
 
     steps:
       - name: Free up disk space
-        uses: jlumbroso/free-disk-space@main
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # main
         with:
           tool-cache: false
           android: true
@@ -55,7 +55,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v10.0.1
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
 
       - name: Cache uv dependencies
         uses: actions/cache@v6
@@ -78,7 +78,7 @@ jobs:
 
       - name: Build container image with Buildah
         id: build-image
-        uses: redhat-actions/buildah-build@v3
+        uses: redhat-actions/buildah-build@3a51aade9afa17e5c78256bcbe2e1ee08c7b995b # v3
         with:
           image: ansible-chatbot-stack
           tags: test

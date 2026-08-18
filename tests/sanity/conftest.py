@@ -25,6 +25,7 @@ _OPENAI_REQUIRED = ["OPENAI_API_KEY", "OPENAI_INFERENCE_MODEL"]
 _AZURE_REQUIRED = ["AZURE_OPENAI_BASE_URL", "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_INFERENCE_MODEL"]
 
 _SANITY_DIR = Path(__file__).parent
+_LIGHTSPEED_STACK_CONFIG = str(_SANITY_DIR / "lightspeed-stack.yaml")
 
 
 def _check_required_vars(var_names):
@@ -34,7 +35,7 @@ def _check_required_vars(var_names):
         pytest.skip(f"Missing required environment variables: {', '.join(missing)}")
 
 
-def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides):
+def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides):  # noqa: cognitive-complexity
     """
     Start the chatbot container for a given provider config.
 
@@ -95,7 +96,7 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides)
         except Exception:
             pass
 
-    cmd = [
+    cmd = [  # NOSONAR — operator-controlled args, no external user input
         container_runtime, "run",
         "--rm",
         "--name", container_name,
@@ -216,7 +217,7 @@ def granite_server():
         env_overrides["VLLM_TLS_VERIFY"] = os.environ["VLLM_TLS_VERIFY"]
 
     run_config = str(_SANITY_DIR / "granite-chatbot-run.yaml")
-    ls_config = str(_SANITY_DIR / "lightspeed-stack.yaml")
+    ls_config = _LIGHTSPEED_STACK_CONFIG
 
     process, runtime, name = _start_sanity_server(run_config, ls_config, env_overrides)
     yield True
@@ -241,7 +242,7 @@ def openai_real_server():
         env_overrides["OPENAI_BASE_URL"] = os.environ["OPENAI_BASE_URL"]
 
     run_config = str(_SANITY_DIR / "openai-chatbot-run.yaml")
-    ls_config = str(_SANITY_DIR / "lightspeed-stack.yaml")
+    ls_config = _LIGHTSPEED_STACK_CONFIG
 
     process, runtime, name = _start_sanity_server(run_config, ls_config, env_overrides)
     yield True
@@ -267,7 +268,7 @@ def azure_server():
     }
 
     run_config = str(_SANITY_DIR / "azure-chatbot-run.yaml")
-    ls_config = str(_SANITY_DIR / "lightspeed-stack.yaml")
+    ls_config = _LIGHTSPEED_STACK_CONFIG
 
     process, runtime, name = _start_sanity_server(run_config, ls_config, env_overrides)
     yield True
