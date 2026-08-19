@@ -46,27 +46,25 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides,
     If a server is already running on port 8322 with the expected model, skips container startup.
     """
     # Check if server is already running
+    server_running = False
     try:
         resp = requests.get(f"{BASE_URL}/v1/config", timeout=2)
-        if resp.status_code == 200:
-            # Validate the running server has the expected model to avoid silently
-            # running tests against a stale or wrong container.
-            try:
-                models_resp = requests.get(f"{BASE_URL}/v1/models", timeout=2)
-                if models_resp.status_code != 200 or expected_model not in models_resp.text:
-                    pytest.fail(
-                        f"Stale server detected on {BASE_URL}: expected model {expected_model!r} "
-                        f"not found in /v1/models. Stop the existing server first."
-                    )
-            except requests.exceptions.RequestException:
-                pytest.fail(
-                    f"Server is running on {BASE_URL} but /v1/models is unreachable — "
-                    f"cannot verify expected model {expected_model!r}. Stop the existing server first."
-                )
-            print(f"\n[✓] Chatbot server already running at {BASE_URL}")
-            return None, None, None, None
+        server_running = resp.status_code == 200
     except requests.exceptions.RequestException:
         pass
+
+    if server_running:
+        # Validate the running server has the expected model to avoid silently
+        # running tests against a stale or wrong container.
+        # Let RequestException propagate naturally — unreachable /v1/models is a test failure.
+        models_resp = requests.get(f"{BASE_URL}/v1/models", timeout=2)
+        if models_resp.status_code != 200 or expected_model not in models_resp.text:
+            pytest.fail(
+                f"Stale server detected on {BASE_URL}: expected model {expected_model!r} "
+                f"not found in /v1/models. Stop the existing server first."
+            )
+        print(f"\n[✓] Chatbot server already running at {BASE_URL}")
+        return None, None, None, None
 
     # Check prerequisites
     if not Path("./embeddings_model").exists():
