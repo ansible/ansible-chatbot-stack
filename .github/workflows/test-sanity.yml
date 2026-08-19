@@ -49,6 +49,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
+      - name: Fail if no providers configured
+        run: |
+          if [ -z "$VLLM_URL" ] && [ -z "$OPENAI_API_KEY" ] && [ -z "$AZURE_OPENAI_BASE_URL" ]; then
+            echo "::error::No sanity provider credentials configured — nothing will be tested"
+            exit 1
+          fi
+
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
@@ -89,13 +96,6 @@ jobs:
 
       - name: Verify container image
         run: podman images ${{ steps.build-image.outputs.image-with-tag }}
-
-      - name: Fail if no providers configured
-        run: |
-          if [ -z "$VLLM_URL" ] && [ -z "$OPENAI_API_KEY" ] && [ -z "$AZURE_OPENAI_BASE_URL" ]; then
-            echo "::error::No sanity provider credentials configured — nothing will be tested"
-            exit 1
-          fi
 
       - name: Run sanity tests
         run: uv run --frozen --group test pytest tests/sanity/ -v -s --tb=long

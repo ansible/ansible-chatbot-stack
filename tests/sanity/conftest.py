@@ -14,6 +14,7 @@ import subprocess
 import tempfile
 import threading
 import time
+import warnings
 from pathlib import Path
 
 import pytest
@@ -52,13 +53,16 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides,
             # running tests against a stale or wrong container.
             try:
                 models_resp = requests.get(f"{BASE_URL}/v1/models", timeout=2)
-                if models_resp.status_code == 200 and expected_model not in models_resp.text:
+                if models_resp.status_code != 200 or expected_model not in models_resp.text:
                     pytest.fail(
                         f"Stale server detected on {BASE_URL}: expected model {expected_model!r} "
                         f"not found in /v1/models. Stop the existing server first."
                     )
             except requests.exceptions.RequestException:
-                pass
+                pytest.fail(
+                    f"Server is running on {BASE_URL} but /v1/models is unreachable — "
+                    f"cannot verify expected model {expected_model!r}. Stop the existing server first."
+                )
             print(f"\n[✓] Chatbot server already running at {BASE_URL}")
             return None, None, None, None
     except requests.exceptions.RequestException:
@@ -87,7 +91,7 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides,
 
     # Resolve container image — validate tag to prevent tainted input reaching subprocess
     image_tag = os.environ.get("ANSIBLE_CHATBOT_VERSION", "latest")
-    if not re.match(r"^[a-zA-Z0-9][a-zA-Z0-9._\-]*$", image_tag):
+    if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._\-]*", image_tag):
         pytest.fail(f"Invalid ANSIBLE_CHATBOT_VERSION tag: {image_tag!r}")
     full_image = f"ansible-chatbot-stack:{image_tag}"
 
@@ -185,6 +189,11 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides,
             sys.stderr.write(f"\n[✗] Container exited (code {process.poll()})\n")
             for line in recent:
                 sys.stderr.write(line + "\n")
+            try:
+                os.unlink(env_file_path)
+            except OSError:
+                pass
+            _stop_sanity_server(process, container_runtime, container_name)
             pytest.fail(f"Server process exited unexpectedly (code {process.poll()})")
 
         try:
@@ -239,12 +248,17 @@ def _stop_sanity_server(process, container_runtime, container_name):
         while True:
             try:
                 requests.get(f"{BASE_URL}/v1/config", timeout=1)
+            except requests.exceptions.Timeout:
+                pass  # connect/read timeout: server still alive, keep waiting
             except requests.exceptions.ConnectionError:
-                return  # port is actually closed
+                return  # port refused: actually closed
             except requests.exceptions.RequestException:
-                pass  # timeout or other transient error: still alive, keep waiting
+                pass  # other transient error: keep waiting
             if time.time() >= deadline:
-                pytest.fail(f"Container {container_name} still serving on {BASE_URL} after 30s")
+                warnings.warn(
+                    f"Container {container_name} still serving on {BASE_URL} after 30s — port may be leaked"
+                )
+                return
             time.sleep(1)
 
 
