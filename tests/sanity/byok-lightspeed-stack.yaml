@@ -1,0 +1,24 @@
+name: Automation Intelligent Assistant (Sanity BYOK)
+service:
+  host: 0.0.0.0
+  port: 8322
+  auth_enabled: false
+  workers: 1
+  color_log: true
+  access_log: true
+llama_stack:
+  use_as_library_client: true
+  library_client_config_path: /.llama/distributions/llama-stack/config/ansible-chatbot-run.yaml
+user_data_collection:
+  feedback_enabled: false
+  transcripts_enabled: false
+customization:
+  system_prompt_path: /.llama/distributions/ansible-chatbot/system-prompts/default.txt
+byok_rag:
+  - rag_id: byok-docs
+    rag_type: inline::faiss
+    embedding_model: sentence-transformers/${env.EMBEDDINGS_MODEL:=/.llama/data/embeddings_model}
+    embedding_dimension: 768
+    vector_db_id: ${env.BYOK_PROVIDER_VECTOR_DB_ID:=}
+    db_path: /.llama/data/byok/distributions/ansible-chatbot/faiss_store.db
+    score_multiplier: 1.2

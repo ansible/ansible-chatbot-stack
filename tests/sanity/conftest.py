@@ -29,6 +29,7 @@ _AZURE_REQUIRED = ["AZURE_OPENAI_BASE_URL", "AZURE_OPENAI_API_KEY", "AZURE_OPENA
 
 _SANITY_DIR = Path(__file__).parent
 _LIGHTSPEED_STACK_CONFIG = str(_SANITY_DIR / "lightspeed-stack.yaml")
+_BYOK_LIGHTSPEED_STACK_CONFIG = str(_SANITY_DIR / "byok-lightspeed-stack.yaml")
 
 
 def _check_required_vars(var_names):
@@ -38,12 +39,53 @@ def _check_required_vars(var_names):
         pytest.skip(f"Missing required environment variables: {', '.join(missing)}")
 
 
-def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides, provider, expected_model):  # noqa: cognitive-complexity
+def _build_provider_config(provider):
+    """Return (run_config_path, env_overrides, config_dict) for the given provider."""
+    if provider == "granite":
+        _check_required_vars(_GRANITE_REQUIRED)
+        env_overrides = {
+            "VLLM_URL": os.environ["VLLM_URL"],
+            "VLLM_API_TOKEN": os.environ["VLLM_API_TOKEN"],
+            "INFERENCE_MODEL": os.environ["INFERENCE_MODEL"],
+        }
+        if os.environ.get("VLLM_MAX_TOKENS"):
+            env_overrides["VLLM_MAX_TOKENS"] = os.environ["VLLM_MAX_TOKENS"]
+        if os.environ.get("VLLM_TLS_VERIFY"):
+            env_overrides["VLLM_TLS_VERIFY"] = os.environ["VLLM_TLS_VERIFY"]
+        run_config = str(_SANITY_DIR / "granite-chatbot-run.yaml")
+        config = {"model": f"granite/{os.environ['INFERENCE_MODEL']}", "provider": "granite"}
+
+    elif provider == "openai":
+        _check_required_vars(_OPENAI_REQUIRED)
+        env_overrides = {
+            "OPENAI_API_KEY": os.environ["OPENAI_API_KEY"],
+            "OPENAI_INFERENCE_MODEL": os.environ["OPENAI_INFERENCE_MODEL"],
+        }
+        if os.environ.get("OPENAI_BASE_URL"):
+            env_overrides["OPENAI_BASE_URL"] = os.environ["OPENAI_BASE_URL"]
+        run_config = str(_SANITY_DIR / "openai-chatbot-run.yaml")
+        config = {"model": os.environ["OPENAI_INFERENCE_MODEL"], "provider": "openai"}
+
+    else:  # azure
+        _check_required_vars(_AZURE_REQUIRED)
+        env_overrides = {
+            "AZURE_OPENAI_BASE_URL": os.environ["AZURE_OPENAI_BASE_URL"],
+            "AZURE_OPENAI_API_KEY": os.environ["AZURE_OPENAI_API_KEY"],
+            "AZURE_OPENAI_INFERENCE_MODEL": os.environ["AZURE_OPENAI_INFERENCE_MODEL"],
+        }
+        run_config = str(_SANITY_DIR / "azure-chatbot-run.yaml")
+        config = {"model": os.environ["AZURE_OPENAI_INFERENCE_MODEL"], "provider": "openai_azure"}
+
+    return run_config, env_overrides, config
+
+
+def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides, provider, expected_model, byok_vector_db_path=None):  # noqa: cognitive-complexity
     """
     Start the chatbot container for a given provider config.
 
     Returns (process, container_runtime, container_name, env_file_path) for cleanup.
     If a server is already running on port 8322 with the expected model, skips container startup.
+    When byok_vector_db_path is set, the BYOK vector DB is mounted and configured.
     """
     # Check if server is already running
     server_running = False
@@ -71,6 +113,8 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides,
         pytest.fail("embeddings_model directory not found — run 'make setup-test' first")
     if not Path("./vector_db/aap_faiss_store.db").exists():
         pytest.fail("vector_db/aap_faiss_store.db not found — run 'make setup-test' first")
+    if byok_vector_db_path and not (_SANITY_DIR.parent.parent / byok_vector_db_path / "faiss_store.db").exists():
+        pytest.fail(f"{byok_vector_db_path}/faiss_store.db not found — run 'make setup-test' first")
     if not Path("./llama-stack/providers.d").exists():
         pytest.fail("llama-stack/providers.d directory not found — run 'make setup-test' first")
 
@@ -143,6 +187,19 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides,
         "--env", f"LOG_LEVEL={os.environ.get('LOG_LEVEL', 'INFO')}",
         "--env-file", env_file_path,
     ]
+
+    if byok_vector_db_path:
+        byok_vid_file = Path(byok_vector_db_path) / "provider_vector_db_id.ind"
+        byok_vector_db_id = os.environ.get("BYOK_PROVIDER_VECTOR_DB_ID", "")
+        if byok_vid_file.exists() and not byok_vector_db_id:
+            try:
+                byok_vector_db_id = byok_vid_file.read_text().strip()
+            except Exception:
+                pass
+        cmd += [
+            "-v", f"{_SANITY_DIR.parent.parent / byok_vector_db_path}:/.llama/data/byok/distributions/ansible-chatbot{selinux_flag}",
+            "--env", f"BYOK_PROVIDER_VECTOR_DB_ID={byok_vector_db_id}",
+        ]
 
     cmd.append(full_image)
 
@@ -280,44 +337,44 @@ def provider_setup(request):
     Skips automatically when required environment variables are not set.
     """
     provider = request.param
-
-    if provider == "granite":
-        _check_required_vars(_GRANITE_REQUIRED)
-        env_overrides = {
-            "VLLM_URL": os.environ["VLLM_URL"],
-            "VLLM_API_TOKEN": os.environ["VLLM_API_TOKEN"],
-            "INFERENCE_MODEL": os.environ["INFERENCE_MODEL"],
-        }
-        if os.environ.get("VLLM_MAX_TOKENS"):
-            env_overrides["VLLM_MAX_TOKENS"] = os.environ["VLLM_MAX_TOKENS"]
-        if os.environ.get("VLLM_TLS_VERIFY"):
-            env_overrides["VLLM_TLS_VERIFY"] = os.environ["VLLM_TLS_VERIFY"]
-        run_config = str(_SANITY_DIR / "granite-chatbot-run.yaml")
-        config = {"model": f"granite/{os.environ['INFERENCE_MODEL']}", "provider": "granite"}
-
-    elif provider == "openai":
-        _check_required_vars(_OPENAI_REQUIRED)
-        env_overrides = {
-            "OPENAI_API_KEY": os.environ["OPENAI_API_KEY"],
-            "OPENAI_INFERENCE_MODEL": os.environ["OPENAI_INFERENCE_MODEL"],
-        }
-        if os.environ.get("OPENAI_BASE_URL"):
-            env_overrides["OPENAI_BASE_URL"] = os.environ["OPENAI_BASE_URL"]
-        run_config = str(_SANITY_DIR / "openai-chatbot-run.yaml")
-        config = {"model": os.environ["OPENAI_INFERENCE_MODEL"], "provider": "openai"}
-
-    else:  # azure
-        _check_required_vars(_AZURE_REQUIRED)
-        env_overrides = {
-            "AZURE_OPENAI_BASE_URL": os.environ["AZURE_OPENAI_BASE_URL"],
-            "AZURE_OPENAI_API_KEY": os.environ["AZURE_OPENAI_API_KEY"],
-            "AZURE_OPENAI_INFERENCE_MODEL": os.environ["AZURE_OPENAI_INFERENCE_MODEL"],
-        }
-        run_config = str(_SANITY_DIR / "azure-chatbot-run.yaml")
-        config = {"model": os.environ["AZURE_OPENAI_INFERENCE_MODEL"], "provider": "openai_azure"}
-
+    run_config, env_overrides, config = _build_provider_config(provider)
     process, runtime, name, env_file_path = _start_sanity_server(
         run_config, _LIGHTSPEED_STACK_CONFIG, env_overrides, provider, config["model"]
+    )
+    try:
+        yield config
+    finally:
+        _stop_sanity_server(process, runtime, name)
+        if env_file_path:
+            try:
+                os.unlink(env_file_path)
+            except OSError:
+                pass
+
+
+@pytest.fixture(
+    params=[
+        pytest.param("granite", marks=[pytest.mark.granite, pytest.mark.byok]),
+        pytest.param("openai", marks=[pytest.mark.openai_live, pytest.mark.byok]),
+        pytest.param("azure", marks=[pytest.mark.azure, pytest.mark.byok]),
+    ],
+    scope="module",
+)
+def byok_provider_setup(request):
+    """
+    Start the chatbot server with BYOK enabled for the given provider and yield its config.
+
+    Uses the same inference provider env vars as provider_setup, but mounts the BYOK
+    vector DB and uses byok-lightspeed-stack.yaml so both the standard AAP RAG and
+    the BYOK RAG are active simultaneously.
+    Skips automatically when required environment variables are not set.
+    """
+    provider = request.param
+    run_config, env_overrides, config = _build_provider_config(provider)
+    process, runtime, name, env_file_path = _start_sanity_server(
+        run_config, _BYOK_LIGHTSPEED_STACK_CONFIG, env_overrides,
+        provider=f"byok-{provider}", expected_model=config["model"],
+        byok_vector_db_path="byok_vector_db",
     )
     try:
         yield config

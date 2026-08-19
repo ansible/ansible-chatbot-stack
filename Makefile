@@ -32,7 +32,7 @@ endif
 
 
 
-.PHONY: help setup setup-test build build-custom run clean all deploy-k8s shell tag-and-push test update-lock
+.PHONY: help setup setup-test build build-custom run clean all deploy-k8s shell tag-and-push test update-lock test-sanity-byok
 
 .EXPORT_ALL_VARIABLES:
 
@@ -64,6 +64,7 @@ help:
 	@echo "  test-sanity-granite - Run Granite/vLLM sanity tests"
 	@echo "  test-sanity-openai  - Run real OpenAI sanity tests"
 	@echo "  test-sanity-azure   - Run Azure OpenAI sanity tests"
+	@echo "  test-sanity-byok    - Run BYOK sanity tests (requires inference provider env vars)"
 	@echo ""
 	@echo "Required Environment variables:"
 	@echo "  ANSIBLE_CHATBOT_VERSION                - Version tag for the image (default: $(ANSIBLE_CHATBOT_VERSION))"
@@ -303,3 +304,7 @@ test-sanity-openai:
 test-sanity-azure:
 	@echo "Running Azure OpenAI sanity tests (requires AZURE_OPENAI_BASE_URL, AZURE_OPENAI_API_KEY, AZURE_OPENAI_INFERENCE_MODEL)..."
 	uv run --frozen --group test pytest tests/sanity/ -v -m azure
+
+test-sanity-byok:
+	@echo "Running BYOK sanity tests (requires inference provider env vars + byok_vector_db/)..."
+	uv run --frozen --group test pytest tests/sanity/ -v -m byok
