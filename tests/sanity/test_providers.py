@@ -69,6 +69,9 @@ class TestChatbotSanity:
             or response_data.get("result", "")
         )
 
+        assert isinstance(response_text, str), (
+            f"Unexpected response shape: {type(response_text)} — keys: {list(response_data.keys())}"
+        )
         assert len(response_text) > 0, "Response should not be empty"
         content_lower = response_text.lower()
         assert any(
@@ -95,6 +98,7 @@ class TestChatbotSanity:
 
         full_response = ""
         chunks_received = 0
+        non_token_events = []
 
         for line in response.iter_lines():
             if line:
@@ -105,11 +109,16 @@ class TestChatbotSanity:
                         chunk_data = json.loads(line_str[6:])
                         if chunk_data.get("event") == "token":
                             full_response += chunk_data.get("data", {}).get("token", "")
-                    except json.JSONDecodeError:
+                        else:
+                            non_token_events.append(chunk_data)
+                    except (json.JSONDecodeError, AttributeError):
                         pass
 
         assert chunks_received > 0, "Should receive at least one streaming chunk"
-        assert len(full_response) > 0, "Streamed response should not be empty"
+        assert len(full_response) > 0, (
+            f"Streamed response should not be empty. "
+            f"Non-token events received: {non_token_events}"
+        )
 
         content_lower = full_response.lower()
         assert any(

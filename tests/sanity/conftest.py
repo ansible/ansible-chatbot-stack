@@ -11,6 +11,7 @@ import re
 import sys
 import shutil
 import subprocess
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -36,19 +37,30 @@ def _check_required_vars(var_names):
         pytest.skip(f"Missing required environment variables: {', '.join(missing)}")
 
 
-def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides):  # noqa: cognitive-complexity
+def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides, provider, expected_model):  # noqa: cognitive-complexity
     """
     Start the chatbot container for a given provider config.
 
-    Returns (process, container_runtime, container_name) for cleanup.
-    If a server is already running on port 8322, skips container startup.
+    Returns (process, container_runtime, container_name, env_file_path) for cleanup.
+    If a server is already running on port 8322 with the expected model, skips container startup.
     """
     # Check if server is already running
     try:
         resp = requests.get(f"{BASE_URL}/v1/config", timeout=2)
         if resp.status_code == 200:
+            # Validate the running server has the expected model to avoid silently
+            # running tests against a stale or wrong container.
+            try:
+                models_resp = requests.get(f"{BASE_URL}/v1/models", timeout=2)
+                if models_resp.status_code == 200 and expected_model not in models_resp.text:
+                    pytest.fail(
+                        f"Stale server detected on {BASE_URL}: expected model {expected_model!r} "
+                        f"not found in /v1/models. Stop the existing server first."
+                    )
+            except requests.exceptions.RequestException:
+                pass
             print(f"\n[✓] Chatbot server already running at {BASE_URL}")
-            return None, None, None
+            return None, None, None, None
     except requests.exceptions.RequestException:
         pass
 
@@ -57,6 +69,8 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides)
         pytest.fail("embeddings_model directory not found — run 'make setup-test' first")
     if not Path("./vector_db/aap_faiss_store.db").exists():
         pytest.fail("vector_db/aap_faiss_store.db not found — run 'make setup-test' first")
+    if not Path("./llama-stack/providers.d").exists():
+        pytest.fail("llama-stack/providers.d directory not found — run 'make setup-test' first")
 
     # Resolve container runtime — allowlist prevents arbitrary command injection
     _ALLOWED_RUNTIMES = ("podman", "docker")
@@ -87,7 +101,8 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides)
         if build.returncode != 0:
             pytest.fail("Failed to build container image")
 
-    container_name = f"ansible-chatbot-sanity-{os.getpid()}"
+    # Include provider in name to avoid --rm race when running all providers in sequence
+    container_name = f"ansible-chatbot-sanity-{provider}-{os.getpid()}"
     selinux_flag = ":z"
 
     provider_vector_db_id = os.environ.get("PROVIDER_VECTOR_DB_ID", "aap-product-docs-2_6")
@@ -97,6 +112,16 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides)
             provider_vector_db_id = vid_file.read_text().strip()
         except Exception:
             pass
+
+    # Write provider credentials to a 0600 temp file to keep secrets off argv
+    env_file = tempfile.NamedTemporaryFile("w", suffix=".env", delete=False)
+    env_file_path = env_file.name
+    try:
+        for key, value in env_overrides.items():
+            env_file.write(f"{key}={value}\n")
+    finally:
+        env_file.close()
+    os.chmod(env_file_path, 0o600)
 
     cmd = [
         container_runtime, "run",
@@ -114,10 +139,8 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides)
         "--env", f"PROVIDER_VECTOR_DB_ID={provider_vector_db_id}",
         "--env", "PYTHONUNBUFFERED=1",
         "--env", f"LOG_LEVEL={os.environ.get('LOG_LEVEL', 'INFO')}",
+        "--env-file", env_file_path,
     ]
-
-    for key in env_overrides:
-        cmd += ["--env", key]
 
     cmd.append(full_image)
 
@@ -150,7 +173,12 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides)
     max_wait = int(os.environ.get("SERVER_STARTUP_TIMEOUT", "300"))
     print(f"[⏳] Waiting for server to be ready (max {max_wait}s)...")
 
-    for i in range(max_wait):
+    # Use a wall-clock deadline so the budget is measured in real seconds,
+    # not iterations (each iteration can take up to 3s with a 2s request timeout).
+    start = time.monotonic()
+    deadline = start + max_wait
+    last_progress = start
+    while time.monotonic() < deadline:
         if process.poll() is not None:
             with output_lock:
                 recent = output_lines[-30:] if len(output_lines) > 30 else output_lines
@@ -162,12 +190,15 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides)
         try:
             resp = requests.get(f"{BASE_URL}/v1/config", timeout=2)
             if resp.status_code == 200:
-                print(f"[✓] Server ready ({i + 1}s)")
-                return process, container_runtime, container_name
+                elapsed = int(time.monotonic() - start)
+                print(f"[✓] Server ready ({elapsed}s)")
+                return process, container_runtime, container_name, env_file_path
         except requests.exceptions.RequestException:
             pass
-        if (i + 1) % 30 == 0:
-            print(f"[⏳] Still waiting... ({i + 1}s)")
+        now = time.monotonic()
+        if now - last_progress >= 30:
+            print(f"[⏳] Still waiting... ({int(now - start)}s)")
+            last_progress = now
         time.sleep(1)
 
     with output_lock:
@@ -175,6 +206,10 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides)
     sys.stderr.write(f"\n[✗] Server did not start within {max_wait}s\n")
     for line in recent:
         sys.stderr.write(line + "\n")
+    try:
+        os.unlink(env_file_path)
+    except OSError:
+        pass
     _stop_sanity_server(process, container_runtime, container_name)
     pytest.fail(f"Chatbot server failed to start within {max_wait} seconds")
 
@@ -196,16 +231,21 @@ def _stop_sanity_server(process, container_runtime, container_name):
             pass
         subprocess.run([container_runtime, "rm", "-f", container_name], capture_output=True, timeout=5)
 
-    # Wait until port 8322 is no longer responding before returning, so the
-    # next provider's _start_sanity_server doesn't reuse a still-dying container.
+    # Wait until port 8322 is actually closed (refused connection) before returning,
+    # so the next provider's _start_sanity_server doesn't reuse a still-dying container.
+    # Narrow to ConnectionError only: a timeout means the server is still alive.
     if container_name:
         deadline = time.time() + 30
-        while time.time() < deadline:
+        while True:
             try:
                 requests.get(f"{BASE_URL}/v1/config", timeout=1)
-                time.sleep(1)
+            except requests.exceptions.ConnectionError:
+                return  # port is actually closed
             except requests.exceptions.RequestException:
-                break
+                pass  # timeout or other transient error: still alive, keep waiting
+            if time.time() >= deadline:
+                pytest.fail(f"Container {container_name} still serving on {BASE_URL} after 30s")
+            time.sleep(1)
 
 
 # ---------------------------------------------------------------------------
@@ -264,9 +304,18 @@ def provider_setup(request):
         run_config = str(_SANITY_DIR / "azure-chatbot-run.yaml")
         config = {"model": os.environ["AZURE_OPENAI_INFERENCE_MODEL"], "provider": "openai_azure"}
 
-    process, runtime, name = _start_sanity_server(run_config, _LIGHTSPEED_STACK_CONFIG, env_overrides)
-    yield config
-    _stop_sanity_server(process, runtime, name)
+    process, runtime, name, env_file_path = _start_sanity_server(
+        run_config, _LIGHTSPEED_STACK_CONFIG, env_overrides, provider, config["model"]
+    )
+    try:
+        yield config
+    finally:
+        _stop_sanity_server(process, runtime, name)
+        if env_file_path:
+            try:
+                os.unlink(env_file_path)
+            except OSError:
+                pass
 
 
 @pytest.fixture(scope="session")

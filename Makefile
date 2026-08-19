@@ -286,7 +286,7 @@ update-lock:
 
 test:
 	@echo "Running all tests (mock OpenAI server)..."
-	uv run --group test pytest tests/ -v --ignore=tests/sanity
+	uv run --frozen --group test pytest tests/ -v --ignore=tests/sanity
 
 test-sanity:
 	@echo "Running sanity tests (real LLMs — set provider env vars before running)..."
