@@ -1,14 +1,13 @@
-name: Integration Tests
+name: Sanity Tests
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
+#  schedule:
+#    # Nightly at 03:17 UTC
+#    - cron: '17 3 * * *'
 
 jobs:
-  test:
+  test-sanity:
     runs-on: ubuntu-latest
 
     # Only run for ansible organization
@@ -16,18 +15,28 @@ jobs:
 
     permissions:
       contents: read
-      pull-requests: read
 
     env:
       ANSIBLE_CHATBOT_VERSION: 'test'
       CONTAINER_RUNTIME: 'podman'
-      SERVER_STARTUP_TIMEOUT: '300'
+      SERVER_STARTUP_TIMEOUT: '600'
       UV_CACHE_DIR: /tmp/.uv-cache
       HF_HOME: /tmp/.cache/huggingface
+      # Granite (vLLM) — tests skip if these are empty
+      VLLM_URL: ${{ secrets.SANITY_VLLM_URL }}
+      VLLM_API_TOKEN: ${{ secrets.SANITY_VLLM_API_TOKEN }}
+      INFERENCE_MODEL: ${{ secrets.SANITY_INFERENCE_MODEL }}
+      # OpenAI — tests skip if these are empty
+      OPENAI_API_KEY: ${{ secrets.SANITY_OPENAI_API_KEY }}
+      OPENAI_INFERENCE_MODEL: ${{ secrets.SANITY_OPENAI_INFERENCE_MODEL }}
+      # Azure OpenAI — tests skip if these are empty
+      AZURE_OPENAI_BASE_URL: ${{ secrets.SANITY_AZURE_OPENAI_BASE_URL }}
+      AZURE_OPENAI_API_KEY: ${{ secrets.SANITY_AZURE_OPENAI_API_KEY }}
+      AZURE_OPENAI_INFERENCE_MODEL: ${{ secrets.SANITY_AZURE_OPENAI_INFERENCE_MODEL }}
 
     steps:
       - name: Free up disk space
-        uses: jlumbroso/free-disk-space@main
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # main
         with:
           tool-cache: false
           android: true
@@ -40,13 +49,20 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
+      - name: Fail if no providers configured
+        run: |
+          if [ -z "$VLLM_URL" ] && [ -z "$OPENAI_API_KEY" ] && [ -z "$AZURE_OPENAI_BASE_URL" ]; then
+            echo "::error::No sanity provider credentials configured — nothing will be tested"
+            exit 1
+          fi
+
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v10.0.1
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
 
       - name: Cache uv dependencies
         uses: actions/cache@v6
@@ -69,7 +85,7 @@ jobs:
 
       - name: Build container image with Buildah
         id: build-image
-        uses: redhat-actions/buildah-build@v3
+        uses: redhat-actions/buildah-build@3a51aade9afa17e5c78256bcbe2e1ee08c7b995b # v3
         with:
           image: ansible-chatbot-stack
           tags: test
@@ -81,58 +97,36 @@ jobs:
       - name: Verify container image
         run: podman images ${{ steps.build-image.outputs.image-with-tag }}
 
-      - name: Run integration tests
-        run: uv run --frozen --group test pytest tests/ --ignore=tests/sanity -v -s --tb=long
-
-      # Generate minimal coverage report for Codecov onboarding
-      # This ensures the repository appears as "onboarded" in Codecov dashboard
-      # for management tracking and DORA metrics, even without actual coverage data.
-      # Note: This is an infrastructure/integration project with no Python source code to cover.
-      # The tests verify the containerized chatbot stack works end-to-end via HTTP API.
-      - name: Generate placeholder coverage report
-        run: |
-          cat > coverage.xml << 'EOF'
-          <?xml version="1.0" ?>
-          <coverage version="1.0">
-            <packages>
-              <package name="ansible-chatbot-stack" line-rate="0.0" branch-rate="0.0" complexity="0">
-                <classes></classes>
-              </package>
-            </packages>
-          </coverage>
-          EOF
-
-      - name: Upload coverage to Codecov
-        # Skip for fork PRs where secrets are not available
-        if: (github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request') && github.actor != 'dependabot[bot]'
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          url: ${{ vars.CODECOV_URL }}
-          files: ./coverage.xml
-          flags: ansible-chatbot-stack
-          fail_ci_if_error: false
+      - name: Run sanity tests
+        run: uv run --frozen --group test pytest tests/sanity/ -v -s --tb=long
 
       - name: Upload test artifacts (on failure)
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: test-logs
+          name: sanity-test-logs
           path: |
-            tests/test_data/
             .pytest_cache/
           retention-days: 3
 
       - name: Summary
         if: always()
         run: |
-          echo "## Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## Sanity Test Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Container Image**: ${{ steps.build-image.outputs.image-with-tag }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Trigger**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Providers" >> $GITHUB_STEP_SUMMARY
+          echo "| Provider | Credentials set |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|----------------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Granite (vLLM) | ${{ secrets.SANITY_VLLM_URL != '' && '✅' || '⚠️ skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| OpenAI | ${{ secrets.SANITY_OPENAI_API_KEY != '' && '✅' || '⚠️ skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Azure OpenAI | ${{ secrets.SANITY_AZURE_OPENAI_BASE_URL != '' && '✅' || '⚠️ skipped' }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           if [ "${{ job.status }}" == "success" ]; then
-            echo "✅ All integration tests passed!" >> $GITHUB_STEP_SUMMARY
+            echo "✅ All sanity tests passed!" >> $GITHUB_STEP_SUMMARY
           else
             echo "❌ Some tests failed. Check the logs above for details." >> $GITHUB_STEP_SUMMARY
           fi
