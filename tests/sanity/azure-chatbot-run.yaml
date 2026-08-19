@@ -12,7 +12,7 @@ apis:
 providers:
   inference:
   - provider_id: openai_azure
-    provider_type: remote::openai
+    provider_type: remote::azure
     config:
       base_url: ${env.AZURE_OPENAI_BASE_URL}/openai/v1
       api_key: ${env.AZURE_OPENAI_API_KEY}

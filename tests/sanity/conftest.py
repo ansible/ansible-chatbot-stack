@@ -116,8 +116,8 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides)
         "--env", f"LOG_LEVEL={os.environ.get('LOG_LEVEL', 'INFO')}",
     ]
 
-    for key, val in env_overrides.items():
-        cmd += ["--env", f"{key}={val}"]
+    for key in env_overrides:
+        cmd += ["--env", key]
 
     cmd.append(full_image)
 
@@ -165,16 +165,17 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides)
                 print(f"[✓] Server ready ({i + 1}s)")
                 return process, container_runtime, container_name
         except requests.exceptions.RequestException:
-            if (i + 1) % 30 == 0:
-                print(f"[⏳] Still waiting... ({i + 1}s)")
-            time.sleep(1)
+            pass
+        if (i + 1) % 30 == 0:
+            print(f"[⏳] Still waiting... ({i + 1}s)")
+        time.sleep(1)
 
     with output_lock:
         recent = output_lines[-30:] if len(output_lines) > 30 else output_lines
     sys.stderr.write(f"\n[✗] Server did not start within {max_wait}s\n")
     for line in recent:
         sys.stderr.write(line + "\n")
-    process.kill()
+    _stop_sanity_server(process, container_runtime, container_name)
     pytest.fail(f"Chatbot server failed to start within {max_wait} seconds")
 
 
@@ -189,8 +190,22 @@ def _stop_sanity_server(process, container_runtime, container_name):
             process.kill()
 
     if container_runtime and container_name:
-        subprocess.run([container_runtime, "stop", container_name], capture_output=True, timeout=10)
+        try:
+            subprocess.run([container_runtime, "stop", container_name], capture_output=True, timeout=10)
+        except subprocess.TimeoutExpired:
+            pass
         subprocess.run([container_runtime, "rm", "-f", container_name], capture_output=True, timeout=5)
+
+    # Wait until port 8322 is no longer responding before returning, so the
+    # next provider's _start_sanity_server doesn't reuse a still-dying container.
+    if container_name:
+        deadline = time.time() + 30
+        while time.time() < deadline:
+            try:
+                requests.get(f"{BASE_URL}/v1/config", timeout=1)
+                time.sleep(1)
+            except requests.exceptions.RequestException:
+                break
 
 
 # ---------------------------------------------------------------------------

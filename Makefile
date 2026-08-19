@@ -290,7 +290,7 @@ test:
 
 test-sanity:
 	@echo "Running sanity tests (real LLMs — set provider env vars before running)..."
-	uv run --group test pytest tests/sanity/ -v
+	uv run --frozen --group test pytest tests/sanity/ -v
 
 test-sanity-granite:
 	@echo "Running Granite sanity tests (requires VLLM_URL, VLLM_API_TOKEN, INFERENCE_MODEL)..."

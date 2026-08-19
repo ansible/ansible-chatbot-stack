@@ -117,7 +117,7 @@ class TestChatbotSanity:
             for kw in ["ansible automation platform", "aap", "ansible", "automation"]
         ), f"Response should mention Ansible or AAP. Got: {full_response[:200]}"
 
-    def test_query_with_empty_query_returns_error(self, base_url, provider_setup):
+    def test_query_with_empty_query_does_not_crash(self, base_url, provider_setup):
         query_data = {
             "query": "",
             "model": provider_setup["model"],
@@ -128,7 +128,7 @@ class TestChatbotSanity:
             f"{base_url}/v1/query",
             json=query_data,
             headers={"Content-Type": "application/json"},
-            timeout=60,
+            timeout=120,
         )
 
         assert response.status_code in [200, 400, 422], (
