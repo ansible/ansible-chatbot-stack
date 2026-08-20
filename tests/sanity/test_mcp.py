@@ -20,13 +20,14 @@ from __future__ import annotations
 
 import ast
 import json
+import os
 import socket
 import warnings
 
 import pytest
 import requests
 
-from tests.sanity.conftest import _CHATBOT_OUTPUT_LOCK, MCP_AUTH_TOKEN
+from tests.sanity.conftest import _CHATBOT_OUTPUT_LOCK, _TRUTHY, MCP_AUTH_TOKEN
 
 MCP_HEADERS = json.dumps(
     {
@@ -426,12 +427,7 @@ class TestMCPSanity:
             f"{response.text}"
         )
         if not mock_aap.tool_requests():
-            # The model choosing not to call a tool for this query is a legitimate,
-            # non-deterministic outcome (more likely on some providers than others),
-            # not a stack defect — so this is a warning rather than a hard failure.
-            # It still needs to be loud: silently passing here would mean the 404
-            # path was never exercised, which is exactly what this test is for.
-            warnings.warn(
+            message = (
                 "no tool call reached mock AAP — the 404 path was not exercised this run. "
                 "If the tool was filtered in but never invoked (Granite), check that: "
                 "(1) vLLM was started with --enable-auto-tool-choice and a matching "
@@ -439,6 +435,16 @@ class TestMCPSanity:
                 "ansible-chatbot-system-prompt-granite-compat.txt. See README's MCP "
                 "sanity tests section."
             )
+            # The model choosing not to call a tool for this query is a legitimate,
+            # non-deterministic outcome on a single local run — but pyproject.toml sets
+            # no filterwarnings and nothing in CI parses the warnings summary, so a bare
+            # warning would let a genuine, permanent regression (tools stop being
+            # filtered in, or the tool-call parser breaks) pass green indefinitely.
+            # Fail loud in CI; warn locally where an occasional non-deterministic miss
+            # is expected (matches _skip_or_fail_unpullable's CI/local split above).
+            if os.environ.get("CI", "").strip().lower() in _TRUTHY:
+                pytest.fail(message)
+            warnings.warn(message)
 
         health = requests.get(f"{base_url}/v1/config", timeout=10)
         assert health.status_code == 200, (

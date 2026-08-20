@@ -243,7 +243,6 @@ def chatbot_server(mock_openai_server):
     # Common environment variables
     env.update({
         "PROVIDER_VECTOR_DB_ID": provider_vector_db_id,
-        "EMBEDDINGS_MODEL": "./embeddings_model",
         "VECTOR_DB_DIR": "./vector_db",
         "PROVIDERS_DB_DIR": "./test_data",
         "PYTHONUNBUFFERED": "1",

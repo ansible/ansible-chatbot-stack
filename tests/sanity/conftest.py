@@ -406,13 +406,12 @@ def _stop_sanity_server(process, container_runtime, container_name):
         except subprocess.TimeoutExpired:
             process.kill()
 
-    # Drain the capture threads before returning so a still-appending thread from
-    # this container can't race the next provider's _CHATBOT_OUTPUT_LINES.clear().
-    # The process (and its stdout/stderr pipes) is already closed at this point,
-    # so each thread's iter(pipe.readline, "") loop hits EOF and exits promptly.
-    for thread in _CHATBOT_CAPTURE_THREADS:
-        thread.join(timeout=5)
-
+    # Stop/remove the container *before* draining the capture threads: on the
+    # process.kill() path above, killing the podman/docker client doesn't
+    # necessarily stop the container itself, so the stdout/stderr pipes the
+    # threads read from can stay open (held by the still-running container)
+    # until this actually stops it. Joining first would just burn the full
+    # timeout without draining.
     if container_runtime and container_name:
         try:
             subprocess.run([container_runtime, "stop", container_name], capture_output=True, timeout=10)
@@ -422,6 +421,18 @@ def _stop_sanity_server(process, container_runtime, container_name):
             subprocess.run([container_runtime, "rm", "-f", container_name], capture_output=True, timeout=5)
         except subprocess.TimeoutExpired:
             pass
+
+    # Drain the capture threads before returning so a still-appending thread from
+    # this container can't race the next provider's _CHATBOT_OUTPUT_LINES.clear().
+    # The container is stopped by now, so each thread's iter(pipe.readline, "")
+    # loop hits EOF and exits promptly.
+    for thread in _CHATBOT_CAPTURE_THREADS:
+        thread.join(timeout=5)
+        if thread.is_alive():
+            warnings.warn(
+                f"Capture thread {thread.name} still running after container teardown — "
+                "its output may interleave with the next provider's container."
+            )
 
     # Wait until port 8322 is actually closed (refused connection) before returning,
     # so the next provider's _start_sanity_server doesn't reuse a still-dying container.
@@ -704,6 +715,40 @@ def _start_mock_aap_for_sanity():
     return mock
 
 
+_SERVER_REUSE_GRACE_VAR = "SANITY_SERVER_REUSE_GRACE"
+
+
+def _reject_stale_server(context_message):
+    """
+    Fail if a chatbot is already running on BASE_URL without this fixture's own
+    provider-specific extras (BYOK config, MCP sidecars) mounted.
+
+    _start_sanity_server's own reuse check only verifies the model name, so a
+    server left over from an unrelated fixture would otherwise be silently
+    reused without what this fixture needs. But a slow _stop_sanity_server
+    teardown from the *previous* param of this same fixture (30s "port may be
+    leaked" warning) can still be exiting when the next param starts, tripping
+    this for an unrelated reason. Set SANITY_SERVER_REUSE_GRACE=<seconds> to
+    re-poll for that long before failing, rather than skipping the check
+    outright — a genuinely stuck server still fails loud after the grace period.
+    """
+    grace = int(os.environ.get(_SERVER_REUSE_GRACE_VAR, "0") or "0")
+    deadline = time.monotonic() + grace
+    while True:
+        try:
+            resp = requests.get(f"{BASE_URL}/v1/config", timeout=2)
+        except requests.exceptions.RequestException:
+            return
+        if resp.status_code != 200:
+            return
+        if time.monotonic() >= deadline:
+            pytest.fail(
+                f"Chatbot already running at {BASE_URL}. {context_message} "
+                f"Set {_SERVER_REUSE_GRACE_VAR}=<seconds> to tolerate a slow teardown."
+            )
+        time.sleep(1)
+
+
 # ---------------------------------------------------------------------------
 # Parametrized provider fixture
 # ---------------------------------------------------------------------------
@@ -756,19 +801,17 @@ def byok_provider_setup(request):
     the BYOK RAG are active simultaneously.
     Skips automatically when required environment variables are not set.
     """
-    try:
-        resp = requests.get(f"{BASE_URL}/v1/config", timeout=2)
-        if resp.status_code == 200:
-            pytest.fail(
-                f"Chatbot already running at {BASE_URL}. _start_sanity_server's reuse "
-                "check only verifies the model name, not that BYOK config is mounted — "
-                "stop the existing server before BYOK sanity tests."
-            )
-    except requests.exceptions.RequestException:
-        pass
-
     provider = request.param
+    # _build_provider_config's _check_required_vars must run before the reuse
+    # check below: it's what lets a param with missing credentials skip cleanly
+    # rather than hit the hard pytest.fail() below for an unrelated reason.
     run_config, env_overrides, config = _build_provider_config(provider)
+
+    _reject_stale_server(
+        "_start_sanity_server's reuse check only verifies the model name, not that "
+        "BYOK config is mounted — stop the existing server before BYOK sanity tests."
+    )
+
     process, runtime, name, env_file_path = _start_sanity_server(
         run_config, _BYOK_LIGHTSPEED_STACK_CONFIG, env_overrides,
         provider=f"byok-{provider}", expected_model=config["model"],
@@ -800,18 +843,14 @@ def mcp_provider_setup(request):
     Yields a dict with keys 'model', 'provider', 'mock_aap', and 'output_lines'.
     Skips when inference env vars are missing or MCP images cannot be pulled.
     """
-    try:
-        resp = requests.get(f"{BASE_URL}/v1/config", timeout=2)
-        if resp.status_code == 200:
-            pytest.fail(
-                f"Chatbot already running at {BASE_URL}. "
-                "Stop it before MCP sanity tests so MCP sidecars can be attached."
-            )
-    except requests.exceptions.RequestException:
-        pass
-
     provider = request.param
+    # _build_mcp_provider_config's _check_required_vars must run before the reuse
+    # check below: it's what lets a param with missing credentials skip cleanly
+    # rather than hit the hard pytest.fail() below for an unrelated reason.
     run_config, env_overrides, config = _build_mcp_provider_config(provider)
+
+    _reject_stale_server("Stop it before MCP sanity tests so MCP sidecars can be attached.")
+
     mock_aap = _start_mock_aap_for_sanity()
     mcp_handles = []
     process = runtime = name = env_file_path = None

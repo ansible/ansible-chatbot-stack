@@ -22,6 +22,12 @@ from pathlib import Path
 _CONTAINER_UID = 1001
 _CONTAINER_GID = 1001
 
+# The run YAMLs' embedding_model field defaults to this same path via
+# ${env.EMBEDDINGS_MODEL:=/.llama/data/embeddings_model}, and EMBEDDINGS_MODEL is
+# never actually set for any container this script's fixtures run against — so
+# this is what every real invocation resolves to, not just a fallback.
+_CONTAINER_EMBEDDINGS_PATH = "/.llama/data/embeddings_model"
+
 
 def _podman_for_chown():
     """
@@ -126,7 +132,7 @@ async def _write_faiss_vector_db(db_path: Path, model, vector_store_id: str, doc
     # sentence-transformers model (e.g. openai-chatbot-run.yaml's vector_stores
     # entry), so a pre-registered record here is indistinguishable from one the
     # container registers itself at startup.
-    embedding_model = f"sentence-transformers/{os.environ.get('EMBEDDINGS_MODEL', '/.llama/data/embeddings_model')}"
+    embedding_model = f"sentence-transformers/{_CONTAINER_EMBEDDINGS_PATH}"
 
     texts = [doc["content"] for doc in documents]
     embeddings = model.encode(texts)
