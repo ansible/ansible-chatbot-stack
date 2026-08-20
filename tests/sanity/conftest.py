@@ -30,6 +30,8 @@ _OPENAI_REQUIRED = ["OPENAI_API_KEY", "OPENAI_INFERENCE_MODEL"]
 _AZURE_REQUIRED = ["AZURE_OPENAI_BASE_URL", "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_INFERENCE_MODEL"]
 
 _SANITY_DIR = Path(__file__).parent
+_PROJECT_ROOT = _SANITY_DIR.parent.parent
+_TEST_DATA_DIR = _PROJECT_ROOT / ".test_data"
 _LIGHTSPEED_STACK_CONFIG = str(_SANITY_DIR / "lightspeed-stack.yaml")
 _BYOK_LIGHTSPEED_STACK_CONFIG = str(_SANITY_DIR / "byok-lightspeed-stack.yaml")
 _MCP_LIGHTSPEED_STACK_CONFIG = str(_SANITY_DIR / "mcp-lightspeed-stack.yaml")
@@ -216,12 +218,12 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides,
     system_prompt_file = _system_prompt_file_for(provider)
     if not Path(f"./{system_prompt_file}").exists():
         pytest.fail(f"{system_prompt_file} not found in repo root")
-    if not Path("./embeddings_model").exists():
-        pytest.fail("embeddings_model directory not found — run 'make setup-test' first")
-    if not Path("./vector_db/aap_faiss_store.db").exists():
-        pytest.fail("vector_db/aap_faiss_store.db not found — run 'make setup-test' first")
-    if byok_vector_db_path and not (_SANITY_DIR.parent.parent / byok_vector_db_path / "faiss_store.db").exists():
-        pytest.fail(f"{byok_vector_db_path}/faiss_store.db not found — run 'make setup-test' first")
+    if not (_TEST_DATA_DIR / "embeddings_model").exists():
+        pytest.fail(".test_data/embeddings_model directory not found — run 'make setup-sanity-test-data' first")
+    if not (_TEST_DATA_DIR / "vector_db" / "aap_faiss_store.db").exists():
+        pytest.fail(".test_data/vector_db/aap_faiss_store.db not found — run 'make setup-sanity-test-data' first")
+    if byok_vector_db_path and not (_TEST_DATA_DIR / byok_vector_db_path / "faiss_store.db").exists():
+        pytest.fail(f".test_data/{byok_vector_db_path}/faiss_store.db not found — run 'make setup-sanity-test-data' first")
     if not Path("./llama-stack/providers.d").exists():
         pytest.fail("llama-stack/providers.d directory not found — run 'make setup-test' first")
 
@@ -250,7 +252,7 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides,
     selinux_flag = ":z"
 
     provider_vector_db_id = os.environ.get("PROVIDER_VECTOR_DB_ID", "aap-product-docs-2_6")
-    vid_file = Path("./vector_db/provider_vector_db_id.ind")
+    vid_file = _TEST_DATA_DIR / "vector_db" / "provider_vector_db_id.ind"
     if vid_file.exists() and not os.environ.get("PROVIDER_VECTOR_DB_ID"):
         try:
             provider_vector_db_id = vid_file.read_text().strip()
@@ -274,8 +276,8 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides,
         "--platform", "linux/amd64",
         "--security-opt", "label=disable",
         "--network", "host",
-        "-v", f"{Path.cwd()}/embeddings_model:/.llama/data/embeddings_model{selinux_flag}",
-        "-v", f"{Path.cwd()}/vector_db/aap_faiss_store.db:/.llama/data/distributions/ansible-chatbot/aap_faiss_store.db{selinux_flag}",
+        "-v", f"{_TEST_DATA_DIR}/embeddings_model:/.llama/data/embeddings_model{selinux_flag}",
+        "-v", f"{_TEST_DATA_DIR}/vector_db/aap_faiss_store.db:/.llama/data/distributions/ansible-chatbot/aap_faiss_store.db{selinux_flag}",
         "-v", f"{lightspeed_config_path}:/.llama/distributions/ansible-chatbot/config/lightspeed-stack.yaml{selinux_flag}",
         "-v", f"{run_config_path}:/.llama/distributions/llama-stack/config/ansible-chatbot-run.yaml{selinux_flag}",
         "-v", f"{Path.cwd()}/{system_prompt_file}:/.llama/distributions/ansible-chatbot/system-prompts/default.txt{selinux_flag}",
@@ -287,7 +289,7 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides,
     ]
 
     if byok_vector_db_path:
-        byok_vid_file = _SANITY_DIR.parent.parent / byok_vector_db_path / "provider_vector_db_id.ind"
+        byok_vid_file = _TEST_DATA_DIR / byok_vector_db_path / "provider_vector_db_id.ind"
         byok_vector_db_id = os.environ.get("BYOK_PROVIDER_VECTOR_DB_ID", "")
         if byok_vid_file.exists() and not byok_vector_db_id:
             try:
@@ -295,7 +297,7 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides,
             except OSError:
                 pass
         cmd += [
-            "-v", f"{_SANITY_DIR.parent.parent / byok_vector_db_path}:/.llama/data/byok/distributions/ansible-chatbot{selinux_flag}",
+            "-v", f"{_TEST_DATA_DIR / byok_vector_db_path}:/.llama/data/byok/distributions/ansible-chatbot{selinux_flag}",
             "--env", f"BYOK_PROVIDER_VECTOR_DB_ID={byok_vector_db_id}",
         ]
 

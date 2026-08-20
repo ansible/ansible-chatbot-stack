@@ -8,7 +8,7 @@ Tests run for each provider configured via the byok_provider_setup fixture:
                                AZURE_OPENAI_INFERENCE_MODEL
 
 A provider is skipped automatically when its required variables are not set.
-The BYOK vector DB must exist at byok_vector_db/ (created by 'make setup-test').
+The BYOK vector DB must exist at .test_data/byok_vector_db/ (created by 'make setup-sanity-test-data').
 
 Examples:
     make test-sanity-byok                 # all providers, BYOK mode
@@ -119,6 +119,7 @@ class TestBYOKSanity:
                 "version 1.0",
                 "integrates custom knowledge sources",
                 "dynamic knowledge retrieval",
+                "fictional automation plugin",
             ]
         ), (
             f"Response should reference distinctive BYOK corpus content. Got: {response_text[:200]}"

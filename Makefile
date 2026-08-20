@@ -32,7 +32,7 @@ endif
 
 
 
-.PHONY: help setup setup-test build build-custom run clean all deploy-k8s shell tag-and-push test update-lock test-sanity-byok test-sanity-mcp
+.PHONY: help setup setup-test setup-sanity-test-data build build-custom run clean all deploy-k8s shell tag-and-push test update-lock test-sanity-byok test-sanity-mcp
 
 .EXPORT_ALL_VARIABLES:
 
@@ -47,6 +47,7 @@ help:
 	@echo "  all               - Run all steps (setup, build, build-custom)"
 	@echo "  setup             - Sets up llama-stack and the external lightspeed providers"
 	@echo "  setup-test        - Sets up test environment with dummy data (no Quay credentials needed)"
+	@echo "  setup-sanity-test-data - Sets up dummy data for sanity tests, isolated under .test_data/"
 	@echo "  setup-vector-db   - Sets up vector DB and embedding model"
 	@echo "  build             - Build the customized Ansible Chatbot Stack image from lightspeed-core/lightspeed-stack"
 	@echo "  run               - Run the Ansible Chatbot Stack container built with 'build-lsc'"
@@ -91,6 +92,12 @@ setup-test: llama-stack/providers.d/inline/agents/lightspeed_inline_agent.yaml
 	uv sync --group test
 	uv run python tests/setup_test_data.py
 	@echo "Test environment setup complete."
+
+setup-sanity-test-data: llama-stack/providers.d/inline/agents/lightspeed_inline_agent.yaml
+	@echo "Setting up sanity test data (dummy data, isolated under .test_data/)..."
+	uv sync --group test
+	TEST_DATA_ROOT=.test_data uv run python tests/setup_test_data.py
+	@echo "Sanity test data setup complete."
 
 setup-vector-db: vector_db/aap_faiss_store.db
 vector_db/aap_faiss_store.db:
@@ -308,7 +315,7 @@ test-sanity-azure:
 	uv run --frozen --group test pytest tests/sanity/ -v -m azure
 
 test-sanity-byok:
-	@echo "Running BYOK sanity tests (requires inference provider env vars + byok_vector_db/)..."
+	@echo "Running BYOK sanity tests (requires inference provider env vars + .test_data/byok_vector_db/)..."
 	uv run --frozen --group test pytest tests/sanity/ -v -m byok
 
 test-sanity-mcp:

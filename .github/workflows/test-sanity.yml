@@ -84,7 +84,7 @@ jobs:
             hf-models-${{ runner.os }}-
 
       - name: Setup test data
-        run: make setup-test
+        run: make setup-sanity-test-data
 
       - name: Build container image with Buildah
         id: build-image

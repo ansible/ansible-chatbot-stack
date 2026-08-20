@@ -166,8 +166,8 @@ Tests for a given provider are skipped automatically when the required environme
 ### Prerequisites
 
 ```shell
-    make setup-test   # downloads embeddings model and creates vector DB
-    make build        # builds the container image (ANSIBLE_CHATBOT_VERSION required)
+    make setup-sanity-test-data   # downloads embeddings model and creates vector DB under .test_data/
+    make build                    # builds the container image (ANSIBLE_CHATBOT_VERSION required)
 ```
 
 ### Running sanity tests

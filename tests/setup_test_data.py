@@ -224,9 +224,21 @@ def main():
     script_dir = Path(__file__).parent
     project_root = script_dir.parent
 
-    embeddings_dir = project_root / "embeddings_model"
-    vector_db_dir = project_root / "vector_db"
-    byok_vector_db_dir = project_root / "byok_vector_db"
+    # TEST_DATA_ROOT lets the sanity test suite generate its own copy of the
+    # fixtures under .test_data/, kept separate from the ones used for local
+    # development and the mock test suite (tests/conftest.py). A relative value
+    # is resolved against the project root, not the caller's cwd.
+    test_data_root = os.environ.get("TEST_DATA_ROOT")
+    if test_data_root:
+        data_root = Path(test_data_root)
+        if not data_root.is_absolute():
+            data_root = project_root / data_root
+    else:
+        data_root = project_root
+
+    embeddings_dir = data_root / "embeddings_model"
+    vector_db_dir = data_root / "vector_db"
+    byok_vector_db_dir = data_root / "byok_vector_db"
 
     # Provider ID that matches the test config
     provider_id = "aap-product-docs-2_6"
