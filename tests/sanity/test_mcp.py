@@ -314,6 +314,56 @@ class TestMCPSanity:
                 f"filtered={names[:20]!r}"
             )
 
+    def test_tool_filtering_lightspeed_query(
+        self, base_url, mcp_provider_setup, mcp_filter_debug
+    ):
+        """
+        Restored after review flagged its removal as a coverage gap (nothing else
+        asserts the lightspeed tool family is ever filtered in). Noted as flaky
+        during local testing, so this may need more work (e.g. a clearer prompt
+        or a retry) if it proves flaky in CI too.
+        """
+        mock_aap = mcp_provider_setup["mock_aap"]
+        output_lines = mcp_provider_setup["output_lines"]
+        start = _lines_len(output_lines)
+        mock_aap.clear()
+        response = _post_query(
+            base_url,
+            mcp_provider_setup,
+            "Check the Ansible Lightspeed health status and chatbot health.",
+        )
+        assert response.status_code == 200, (
+            f"Expected 200, got {response.status_code}: {response.text}"
+        )
+
+        new_lines = _lines_from(output_lines, start)
+        names = [n.lower() for n in _filtered_tool_names(new_lines)]
+        joined_names = " ".join(names)
+        tool_paths = [entry["path"].lower() for entry in mock_aap.tool_requests()]
+
+        family_hit = (
+            any(hint in joined_names for hint in _LIGHTSPEED_HINTS)
+            or any(
+                path.startswith("/api/v1/") or path.startswith("/check")
+                for path in tool_paths
+            )
+        )
+        mcp_filter_debug(
+            new_lines,
+            "Check the Ansible Lightspeed health status and chatbot health.",
+        )
+        assert family_hit, (
+            "Expected lightspeed tool family (e.g. health_status) in the filtered tool "
+            f"list or mock AAP. filtered={names[:20]!r} mock_paths={tool_paths!r}"
+        )
+        # See test_tool_filtering_controller_query's matching comment: the filter
+        # model's exclusion of the other family is not deterministic across providers.
+        if any(hint in joined_names for hint in _CONTROLLER_HINTS):
+            warnings.warn(
+                "Controller tool family hints leaked into a lightspeed-only filter result: "
+                f"filtered={names[:20]!r}"
+            )
+
     def test_knowledge_search_always_included(
         self, base_url, mcp_provider_setup, mcp_filter_debug
     ):
