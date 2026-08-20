@@ -51,6 +51,10 @@ MCP_AUTH_TOKEN = "Bearer sanity-token"
 # Shared chatbot log buffer so MCP tests can inspect tool-filter output.
 _CHATBOT_OUTPUT_LINES: list[str] = []
 _CHATBOT_OUTPUT_LOCK = threading.Lock()
+# The stdout/stderr capture threads for the currently (or most recently) running
+# container, so _stop_sanity_server can join them before the next provider's
+# _start_sanity_server clears _CHATBOT_OUTPUT_LINES out from under them.
+_CHATBOT_CAPTURE_THREADS: list[threading.Thread] = []
 
 _TRUTHY = ("1", "true", "yes", "on")
 
@@ -224,6 +228,14 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides,
         pytest.fail(".test_data/vector_db/aap_faiss_store.db not found — run 'make setup-sanity-test-data' first")
     if byok_vector_db_path and not (_TEST_DATA_DIR / byok_vector_db_path / "faiss_store.db").exists():
         pytest.fail(f".test_data/{byok_vector_db_path}/faiss_store.db not found — run 'make setup-sanity-test-data' first")
+    if byok_vector_db_path and not os.environ.get("BYOK_PROVIDER_VECTOR_DB_ID"):
+        byok_ind_path = _TEST_DATA_DIR / byok_vector_db_path / "provider_vector_db_id.ind"
+        if not byok_ind_path.exists() or not byok_ind_path.read_text().strip():
+            pytest.fail(
+                f"{byok_ind_path} missing or empty — BYOK_PROVIDER_VECTOR_DB_ID would resolve "
+                "to an empty string and BYOK retrieval would be silently inert. "
+                "Run 'make setup-sanity-test-data' first."
+            )
     if not Path("./llama-stack/providers.d").exists():
         pytest.fail("llama-stack/providers.d directory not found — run 'make setup-test' first")
 
@@ -303,7 +315,8 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides,
 
     cmd.append(full_image)
 
-    _CHATBOT_OUTPUT_LINES.clear()
+    with _CHATBOT_OUTPUT_LOCK:
+        _CHATBOT_OUTPUT_LINES.clear()
     output_lines = _CHATBOT_OUTPUT_LINES
 
     def _capture(pipe, prefix=""):
@@ -326,8 +339,11 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides,
         bufsize=1,
     )
 
-    threading.Thread(target=_capture, args=(process.stdout, "[STDOUT] "), daemon=True).start()
-    threading.Thread(target=_capture, args=(process.stderr, "[STDERR] "), daemon=True).start()
+    stdout_thread = threading.Thread(target=_capture, args=(process.stdout, "[STDOUT] "), daemon=True)
+    stderr_thread = threading.Thread(target=_capture, args=(process.stderr, "[STDERR] "), daemon=True)
+    stdout_thread.start()
+    stderr_thread.start()
+    _CHATBOT_CAPTURE_THREADS[:] = [stdout_thread, stderr_thread]
 
     max_wait = int(os.environ.get("SERVER_STARTUP_TIMEOUT", "300"))
     print(f"[⏳] Waiting for server to be ready (max {max_wait}s)...")
@@ -388,12 +404,22 @@ def _stop_sanity_server(process, container_runtime, container_name):
         except subprocess.TimeoutExpired:
             process.kill()
 
+    # Drain the capture threads before returning so a still-appending thread from
+    # this container can't race the next provider's _CHATBOT_OUTPUT_LINES.clear().
+    # The process (and its stdout/stderr pipes) is already closed at this point,
+    # so each thread's iter(pipe.readline, "") loop hits EOF and exits promptly.
+    for thread in _CHATBOT_CAPTURE_THREADS:
+        thread.join(timeout=5)
+
     if container_runtime and container_name:
         try:
             subprocess.run([container_runtime, "stop", container_name], capture_output=True, timeout=10)
         except subprocess.TimeoutExpired:
             pass
-        subprocess.run([container_runtime, "rm", "-f", container_name], capture_output=True, timeout=5)
+        try:
+            subprocess.run([container_runtime, "rm", "-f", container_name], capture_output=True, timeout=5)
+        except subprocess.TimeoutExpired:
+            pass
 
     # Wait until port 8322 is actually closed (refused connection) before returning,
     # so the next provider's _start_sanity_server doesn't reuse a still-dying container.
@@ -582,7 +608,10 @@ def _stop_mcp_container(process, container_runtime, name, env_file_path, log_fil
         except subprocess.TimeoutExpired:
             process.kill()
     if container_runtime and name:
-        subprocess.run([container_runtime, "rm", "-f", name], capture_output=True, timeout=20)
+        try:
+            subprocess.run([container_runtime, "rm", "-f", name], capture_output=True, timeout=20)
+        except subprocess.TimeoutExpired:
+            pass
     if log_handle:
         try:
             log_handle.close()
@@ -725,6 +754,17 @@ def byok_provider_setup(request):
     the BYOK RAG are active simultaneously.
     Skips automatically when required environment variables are not set.
     """
+    try:
+        resp = requests.get(f"{BASE_URL}/v1/config", timeout=2)
+        if resp.status_code == 200:
+            pytest.fail(
+                f"Chatbot already running at {BASE_URL}. _start_sanity_server's reuse "
+                "check only verifies the model name, not that BYOK config is mounted — "
+                "stop the existing server before BYOK sanity tests."
+            )
+    except requests.exceptions.RequestException:
+        pass
+
     provider = request.param
     run_config, env_overrides, config = _build_provider_config(provider)
     process, runtime, name, env_file_path = _start_sanity_server(

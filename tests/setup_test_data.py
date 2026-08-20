@@ -15,6 +15,30 @@ import sys
 from pathlib import Path
 
 
+# The Containerfile always runs the chatbot as this UID:GID (`RUN chown -R 1001:1001
+# /.llama`, `USER 1001`), regardless of runtime or platform.
+_CONTAINER_UID = 1001
+_CONTAINER_GID = 1001
+
+
+def _grant_container_access(path: Path, dir_mode: int, file_mode: int):
+    """
+    Make a host-created path accessible to the chatbot container.
+
+    Chowning to the container's UID:GID lets us use restrictive permissions, but
+    that only succeeds when the calling process already has that UID (true in CI,
+    where the runner user is UID 1001) or is root. Locally the invoking user is
+    usually a different UID and can't chown to 1001 without privilege, so fall
+    back to world-accessible permissions there instead of failing setup.
+    """
+    mode = dir_mode if path.is_dir() else file_mode
+    try:
+        os.chown(path, _CONTAINER_UID, _CONTAINER_GID)
+        path.chmod(mode)
+    except PermissionError:
+        path.chmod(0o777 if path.is_dir() else 0o666)
+
+
 def setup_embeddings_model(target_dir: Path):
     """Download the public embeddings model from HuggingFace."""
     import shutil
@@ -36,18 +60,19 @@ def setup_embeddings_model(target_dir: Path):
     # SentenceTransformer.save() can leave weight files (e.g. model.safetensors)
     # with the restrictive mode HuggingFace's cache stores them under (owner-only),
     # while the chatbot container reads this directory as a different, non-matching
-    # UID. Force everything readable/traversable so the container can load it.
+    # UID. This directory is read-only from the container's perspective, so world
+    # read/traverse (not write) is enough for it to load.
     for root, dirs, files in os.walk(target_dir):
         for d in dirs:
-            (Path(root) / d).chmod(0o777)
+            (Path(root) / d).chmod(0o755)
         for f in files:
-            (Path(root) / f).chmod(0o666)
+            (Path(root) / f).chmod(0o644)
 
     print(f"✅ Embeddings model saved")
     return model
 
 
-async def _write_faiss_vector_db(db_path: Path, model, vector_store_id: str, documents: list):
+async def _write_faiss_vector_db(db_path: Path, model, vector_store_id: str, documents: list, provider_id: str):
     """
     Populate a kvstore SQLite file using llama-stack's own FaissIndex/SqliteKVStoreImpl
     classes, rather than hand-rolling the key/value schema.
@@ -67,6 +92,12 @@ async def _write_faiss_vector_db(db_path: Path, model, vector_store_id: str, doc
     if db_path.exists():
         db_path.unlink()
 
+    # Matches the embedding_model string the run YAMLs register for this same
+    # sentence-transformers model (e.g. openai-chatbot-run.yaml's vector_stores
+    # entry), so a pre-registered record here is indistinguishable from one the
+    # container registers itself at startup.
+    embedding_model = f"sentence-transformers/{os.environ.get('EMBEDDINGS_MODEL', '/.llama/data/embeddings_model')}"
+
     texts = [doc["content"] for doc in documents]
     embeddings = model.encode(texts)
     dimension = int(embeddings.shape[1])
@@ -79,9 +110,9 @@ async def _write_faiss_vector_db(db_path: Path, model, vector_store_id: str, doc
     # is immediately self-contained and loadable without relying on that timing.
     vector_store = VectorStore(
         identifier=vector_store_id,
-        provider_id="aap_faiss",
+        provider_id=provider_id,
         provider_resource_id=vector_store_id,
-        embedding_model=vector_store_id,
+        embedding_model=embedding_model,
         embedding_dimension=dimension,
     )
     await kvstore.set(
@@ -97,7 +128,7 @@ async def _write_faiss_vector_db(db_path: Path, model, vector_store_id: str, doc
             metadata=doc["metadata"],
             chunk_metadata=ChunkMetadata(document_id=doc["metadata"].get("document_id", vector_store_id)),
             embedding=[float(x) for x in embeddings[i]],
-            embedding_model=vector_store_id,
+            embedding_model=embedding_model,
             embedding_dimension=dimension,
         )
         for i, doc in enumerate(documents)
@@ -148,16 +179,17 @@ def setup_vector_db(target_dir: Path, model, provider_id: str):
     db_path = target_dir / "aap_faiss_store.db"
 
     print("  Creating embeddings for dummy documents...")
-    dimension = asyncio.run(_write_faiss_vector_db(db_path, model, provider_id, documents))
+    dimension = asyncio.run(
+        _write_faiss_vector_db(db_path, model, vector_store_id=provider_id, documents=documents, provider_id="aap_faiss")
+    )
 
-    # The chatbot container runs as a non-root UID (1001) that won't own these
-    # host-created files, and llama-stack's FAISS provider writes to the kvstore
-    # at startup (vector-store registration). SQLite also needs to create a
-    # rollback-journal file next to the .db file for every write transaction,
-    # so the *directory* must be writable too, not just the .db file itself —
-    # otherwise both fail with "attempt to write a readonly database".
-    db_path.chmod(0o666)
-    target_dir.chmod(0o777)
+    # llama-stack's FAISS provider writes to the kvstore at startup (vector-store
+    # registration). SQLite also needs to create a rollback-journal file next to
+    # the .db file for every write transaction, so the *directory* must be
+    # writable too, not just the .db file itself — otherwise both fail with
+    # "attempt to write a readonly database".
+    _grant_container_access(db_path, dir_mode=0o750, file_mode=0o640)
+    _grant_container_access(target_dir, dir_mode=0o750, file_mode=0o640)
 
     # Create provider ID file
     (target_dir / "provider_vector_db_id.ind").write_text(provider_id)
@@ -199,14 +231,17 @@ def setup_byok_vector_db(target_dir: Path, model, vector_store_id: str):
     target_dir.mkdir(parents=True, exist_ok=True)
     db_path = target_dir / "faiss_store.db"
 
-    dimension = asyncio.run(_write_faiss_vector_db(db_path, model, vector_store_id, documents))
+    # provider_id must be "byok-docs" to match the rag_id declared for the
+    # inline::faiss BYOK provider in byok-lightspeed-stack.yaml.
+    dimension = asyncio.run(
+        _write_faiss_vector_db(db_path, model, vector_store_id, documents, provider_id="byok-docs")
+    )
 
-    # See setup_vector_db()'s matching chmod: the chatbot container runs as a
-    # non-root UID and needs write access to this host-created file, and to
-    # the containing directory (SQLite creates a rollback-journal file there
-    # on every write transaction).
-    db_path.chmod(0o666)
-    target_dir.chmod(0o777)
+    # See setup_vector_db()'s matching _grant_container_access calls: the container
+    # needs write access to this host-created file, and to the containing directory
+    # (SQLite creates a rollback-journal file there on every write transaction).
+    _grant_container_access(db_path, dir_mode=0o750, file_mode=0o640)
+    _grant_container_access(target_dir, dir_mode=0o750, file_mode=0o640)
 
     (target_dir / "provider_vector_db_id.ind").write_text(vector_store_id)
 

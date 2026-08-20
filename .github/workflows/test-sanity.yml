@@ -33,7 +33,9 @@ jobs:
       AZURE_OPENAI_BASE_URL: ${{ secrets.SANITY_AZURE_OPENAI_BASE_URL }}
       AZURE_OPENAI_API_KEY: ${{ secrets.SANITY_AZURE_OPENAI_API_KEY }}
       AZURE_OPENAI_INFERENCE_MODEL: ${{ secrets.SANITY_AZURE_OPENAI_INFERENCE_MODEL }}
-      # MCP servers — tests skip if images cannot be pulled
+      # MCP servers — pinning these means _skip_or_fail_unpullable (conftest.py) fails
+      # the build rather than skipping if the images cannot be pulled; see the Quay
+      # login step below.
       MCP_CONTROLLER_IMAGE: quay.io/ansible/ansible-mcp-controller:latest
       MCP_LIGHTSPEED_IMAGE: quay.io/ansible/ansible-mcp-lightspeed:latest
 
