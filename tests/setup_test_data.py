@@ -103,6 +103,11 @@ def setup_embeddings_model(target_dir: Path):
             (Path(root) / d).chmod(0o755)
         for f in files:
             (Path(root) / f).chmod(0o644)
+    # os.walk only chmods target_dir's children, not target_dir itself — it was
+    # created by mkdir() above under the caller's umask, which can leave it
+    # non-traversable (e.g. 0o700 under umask 0o077) even though everything inside
+    # is now 0o755.
+    target_dir.chmod(0o755)
 
     print(f"✅ Embeddings model saved")
     return model
