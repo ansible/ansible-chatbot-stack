@@ -62,12 +62,24 @@ def _grant_container_access(path: Path, dir_mode: int, file_mode: int):
     mode = dir_mode if path.is_dir() else file_mode
     podman = _podman_for_chown()
     if podman:
-        result = subprocess.run(
+        chown_result = subprocess.run(
             [podman, "unshare", "chown", f"{_CONTAINER_UID}:{_CONTAINER_GID}", str(path)],
             capture_output=True,
         )
-        if result.returncode == 0:
-            path.chmod(mode)
+        if chown_result.returncode == 0:
+            # The chown above re-owns the file to a subuid-mapped identity the
+            # invoking host user doesn't own — a plain host-side path.chmod()
+            # would now fail with PermissionError. chmod must run inside the
+            # same podman unshare namespace, where that identity is uid 0, so
+            # it can chmod the file regardless of who currently owns it.
+            subprocess.run(
+                [podman, "unshare", "chmod", oct(mode)[2:], str(path)],
+                capture_output=True,
+            )
+            # Don't fall through to the host-side path below even if the chmod
+            # above failed: the chown already re-owned the file away from the
+            # host user, so a plain os.chown/path.chmod there would just hit
+            # the same PermissionError this function exists to avoid.
             return
     try:
         os.chown(path, _CONTAINER_UID, _CONTAINER_GID)
