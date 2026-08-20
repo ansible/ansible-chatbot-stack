@@ -301,7 +301,7 @@ test-sanity-granite:
 
 test-sanity-openai:
 	@echo "Running OpenAI sanity tests (requires OPENAI_API_KEY, OPENAI_INFERENCE_MODEL)..."
-	uv run --frozen --group test pytest tests/sanity/ -v -m openai_live
+	uv run --frozen --group test pytest tests/sanity/ -v -m openai
 
 test-sanity-azure:
 	@echo "Running Azure OpenAI sanity tests (requires AZURE_OPENAI_BASE_URL, AZURE_OPENAI_API_KEY, AZURE_OPENAI_INFERENCE_MODEL)..."

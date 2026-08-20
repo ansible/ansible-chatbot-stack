@@ -678,7 +678,7 @@ def _start_mock_aap_for_sanity():
 @pytest.fixture(
     params=[
         pytest.param("granite", marks=pytest.mark.granite),
-        pytest.param("openai", marks=pytest.mark.openai_live),
+        pytest.param("openai", marks=pytest.mark.openai),
         pytest.param("azure", marks=pytest.mark.azure),
     ],
     scope="module",
@@ -709,7 +709,7 @@ def provider_setup(request):
 @pytest.fixture(
     params=[
         pytest.param("granite", marks=[pytest.mark.granite, pytest.mark.byok]),
-        pytest.param("openai", marks=[pytest.mark.openai_live, pytest.mark.byok]),
+        pytest.param("openai", marks=[pytest.mark.openai, pytest.mark.byok]),
         pytest.param("azure", marks=[pytest.mark.azure, pytest.mark.byok]),
     ],
     scope="module",
@@ -744,7 +744,7 @@ def byok_provider_setup(request):
 @pytest.fixture(
     params=[
         pytest.param("granite", marks=[pytest.mark.granite, pytest.mark.mcp]),
-        pytest.param("openai", marks=[pytest.mark.openai_live, pytest.mark.mcp]),
+        pytest.param("openai", marks=[pytest.mark.openai, pytest.mark.mcp]),
         pytest.param("azure", marks=[pytest.mark.azure, pytest.mark.mcp]),
     ],
     scope="module",
