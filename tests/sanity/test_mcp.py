@@ -58,12 +58,14 @@ def _query_headers():
     }
 
 
-def _post_query(base_url, provider_setup, query, timeout=180):
+def _post_query(base_url, provider_setup, query, timeout=180, conversation_id=None):
     payload = {
         "query": query,
         "model": provider_setup["model"],
         "provider": provider_setup["provider"],
     }
+    if conversation_id:
+        payload["conversation_id"] = conversation_id
     return requests.post(
         f"{base_url}/v1/query",
         json=payload,
@@ -312,57 +314,28 @@ class TestMCPSanity:
                 f"filtered={names[:20]!r}"
             )
 
-    def test_tool_filtering_lightspeed_query(
-        self, base_url, mcp_provider_setup, mcp_filter_debug
-    ):
-        mock_aap = mcp_provider_setup["mock_aap"]
-        output_lines = mcp_provider_setup["output_lines"]
-        start = _lines_len(output_lines)
-        mock_aap.clear()
-        response = _post_query(
-            base_url,
-            mcp_provider_setup,
-            "Check the Ansible Lightspeed health status and chatbot health.",
-        )
-        assert response.status_code == 200, (
-            f"Expected 200, got {response.status_code}: {response.text}"
-        )
-
-        new_lines = _lines_from(output_lines, start)
-        names = [n.lower() for n in _filtered_tool_names(new_lines)]
-        joined_names = " ".join(names)
-        tool_paths = [entry["path"].lower() for entry in mock_aap.tool_requests()]
-
-        family_hit = (
-            any(hint in joined_names for hint in _LIGHTSPEED_HINTS)
-            or any(
-                path.startswith("/api/v1/") or path.startswith("/check")
-                for path in tool_paths
-            )
-        )
-        mcp_filter_debug(
-            new_lines,
-            "Check the Ansible Lightspeed health status and chatbot health.",
-        )
-        assert family_hit, (
-            "Expected lightspeed tool family (e.g. health_status) in the filtered tool "
-            f"list or mock AAP. filtered={names[:20]!r} mock_paths={tool_paths!r}"
-        )
-        # See test_tool_filtering_controller_query: exclusion of the other family is
-        # not deterministic across providers, so this is a warning, not a hard failure.
-        if any(hint in joined_names for hint in _CONTROLLER_HINTS):
-            warnings.warn(
-                "Controller tool family hints leaked into a lightspeed-only filter result: "
-                f"filtered={names[:20]!r}"
-            )
-
     def test_knowledge_search_always_included(
         self, base_url, mcp_provider_setup, mcp_filter_debug
     ):
         """RAG still answers product questions when MCP tools are attached."""
         output_lines = mcp_provider_setup["output_lines"]
+
+        # lightspeed_inline_agent's "Always included tools" log line — and the
+        # previously-called-tools lookup it reports on — only run when a
+        # conversation_id is attached to the request (see agents.py's
+        # `if conversation:` branch). Open a conversation with a throwaway first
+        # turn so the real question below can carry one.
+        opening = _post_query(base_url, mcp_provider_setup, "Hello")
+        assert opening.status_code == 200, (
+            f"Expected 200 for opening turn, got {opening.status_code}: {opening.text}"
+        )
+        conversation_id = opening.json().get("conversation_id")
+        assert conversation_id, "Expected /v1/query to return a conversation_id"
+
         start = _lines_len(output_lines)
-        response = _post_query(base_url, mcp_provider_setup, "What is AAP?")
+        response = _post_query(
+            base_url, mcp_provider_setup, "What is AAP?", conversation_id=conversation_id
+        )
         assert response.status_code == 200, (
             f"Expected 200, got {response.status_code}: {response.text}"
         )
@@ -381,17 +354,10 @@ class TestMCPSanity:
         new_lines = _lines_from(output_lines, start)
         mcp_filter_debug(new_lines, "What is AAP?")
         always_included = {n.lower() for n in _always_included_tools(new_lines)}
-        if not always_included:
-            # The response-content assertions above already confirm RAG augmented the
-            # answer, which is the behavior this test actually cares about. The log
-            # marker itself may be conditional on a conversation id upstream (which
-            # _post_query does not send) as well as a plain rename, so its absence
-            # alone shouldn't hard-fail every run — but it must not pass silently either.
-            pytest.skip(
-                "Could not find the 'Always included tools' log line — either it "
-                "requires a conversation id (not sent by _post_query) or the marker "
-                "changed upstream. RAG content was already verified above."
-            )
+        assert always_included, (
+            "Could not find the 'Always included tools' log line despite attaching "
+            "a conversation_id — the marker may have changed upstream."
+        )
         assert "knowledge_search" in always_included, (
             f"knowledge_search should be always-included: {sorted(always_included)!r}"
         )
