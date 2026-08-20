@@ -313,6 +313,16 @@ def chatbot_server(mock_openai_server):
         "--platform", "linux/amd64",
         "--security-opt", "label=disable",
         "--network", "host",  # Use host network for mock OpenAI access
+    ]
+    if os.path.basename(container_runtime) == "podman":
+        # Maps whichever host user actually invoked podman to container uid 1001,
+        # without changing these files' real ownership on disk. setup_test_data.py's
+        # restrictive-mode vector_db/embeddings_model files stay owned (and
+        # readable/writable) by the host process that created them, while this
+        # mapping makes the *container's* view of "uid 1001" resolve to that same
+        # real host owner.
+        cmd += ["--userns", "keep-id:uid=1001,gid=1001"]
+    cmd += [
         "-v", f"{Path.cwd()}/embeddings_model:/.llama/data/embeddings_model{selinux_flag}",
         "-v", f"{Path.cwd()}/vector_db/aap_faiss_store.db:/.llama/data/distributions/ansible-chatbot/aap_faiss_store.db{selinux_flag}",
         "-v", f"{Path.cwd()}/tests/test-lightspeed-stack.yaml:/.llama/distributions/ansible-chatbot/config/lightspeed-stack.yaml{selinux_flag}",

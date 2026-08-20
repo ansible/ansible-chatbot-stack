@@ -11,8 +11,6 @@ This allows tests to run without needing access to private container registries.
 
 import asyncio
 import os
-import shutil
-import subprocess
 import sys
 from pathlib import Path
 
@@ -29,58 +27,22 @@ _CONTAINER_GID = 1001
 _CONTAINER_EMBEDDINGS_PATH = "/.llama/data/embeddings_model"
 
 
-def _podman_for_chown():
-    """
-    Return the podman binary to use for `unshare chown`, or None if the runtime
-    that will actually run the chatbot isn't podman (respects CONTAINER_RUNTIME,
-    matching tests/sanity/conftest.py's runtime resolution).
-    """
-    requested = os.environ.get("CONTAINER_RUNTIME", "").strip()
-    if requested:
-        resolved = shutil.which(requested)
-        return resolved if resolved and os.path.basename(resolved) == "podman" else None
-    return shutil.which("podman")
-
-
 def _grant_container_access(path: Path, dir_mode: int, file_mode: int):
     """
     Make a host-created path accessible to the chatbot container.
 
-    A plain os.chown(path, 1001, 1001) only matches the container's `USER 1001`
-    process when the runtime is rootful or the caller already *is* uid 1001 on
-    the host. Rootless podman — the default in CI — remaps the host uid into a
-    private user namespace, so container uid 1001 corresponds to a *different*
-    host uid than the literal value 1001; chowning to host uid 1001 is invisible
-    to the container in that case. `podman unshare` runs inside that same
-    namespace, so a chown there lands on the host uid podman will actually
-    present as container uid 1001, regardless of what the invoking host uid is.
-
-    Falls back to a plain host chown (root, or already uid 1001) when podman
-    unshare isn't available/applicable, and to world-accessible permissions if
-    that fails too, so setup never hard-fails locally.
+    Chowning to the container's UID:GID lets us use restrictive permissions, but
+    that only succeeds when the calling process already has that UID or is root.
+    Reconciling this with rootless podman's uid remapping is handled on the
+    container side instead (see chatbot_server's and _start_sanity_server's
+    --userns=keep-id), which maps the *invoking host user* to container uid 1001
+    without changing these files' real ownership — so this function doesn't need
+    to chown into a namespace the host process itself couldn't read back out of.
+    Locally the invoking user is usually a different UID and can't chown to
+    1001 without privilege, so fall back to world-accessible permissions there
+    instead of failing setup.
     """
     mode = dir_mode if path.is_dir() else file_mode
-    podman = _podman_for_chown()
-    if podman:
-        chown_result = subprocess.run(
-            [podman, "unshare", "chown", f"{_CONTAINER_UID}:{_CONTAINER_GID}", str(path)],
-            capture_output=True,
-        )
-        if chown_result.returncode == 0:
-            # The chown above re-owns the file to a subuid-mapped identity the
-            # invoking host user doesn't own — a plain host-side path.chmod()
-            # would now fail with PermissionError. chmod must run inside the
-            # same podman unshare namespace, where that identity is uid 0, so
-            # it can chmod the file regardless of who currently owns it.
-            subprocess.run(
-                [podman, "unshare", "chmod", oct(mode)[2:], str(path)],
-                capture_output=True,
-            )
-            # Don't fall through to the host-side path below even if the chmod
-            # above failed: the chown already re-owned the file away from the
-            # host user, so a plain os.chown/path.chmod there would just hit
-            # the same PermissionError this function exists to avoid.
-            return
     try:
         os.chown(path, _CONTAINER_UID, _CONTAINER_GID)
         path.chmod(mode)

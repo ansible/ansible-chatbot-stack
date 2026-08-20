@@ -290,6 +290,17 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides,
         "--platform", "linux/amd64",
         "--security-opt", "label=disable",
         "--network", "host",
+    ]
+    if os.path.basename(container_runtime) == "podman":
+        # Maps whichever host user actually invoked podman to container uid 1001,
+        # without changing these files' real ownership on disk. setup_test_data.py's
+        # restrictive-mode vector_db files stay owned (and readable/writable) by the
+        # host process that created them, while this mapping makes the *container's*
+        # view of "uid 1001" resolve to that same real host owner — no chown needed,
+        # and no risk of chowning the host process itself out of files it still needs
+        # to read (e.g. provider_vector_db_id.ind).
+        cmd += ["--userns", "keep-id:uid=1001,gid=1001"]
+    cmd += [
         "-v", f"{_TEST_DATA_DIR}/embeddings_model:/.llama/data/embeddings_model{selinux_flag}",
         "-v", f"{_TEST_DATA_DIR}/vector_db/aap_faiss_store.db:/.llama/data/distributions/ansible-chatbot/aap_faiss_store.db{selinux_flag}",
         "-v", f"{lightspeed_config_path}:/.llama/distributions/ansible-chatbot/config/lightspeed-stack.yaml{selinux_flag}",
