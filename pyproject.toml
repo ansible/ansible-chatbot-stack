@@ -43,4 +43,5 @@ markers = [
     "openai_live: tests using the real OpenAI API (requires OPENAI_API_KEY, OPENAI_INFERENCE_MODEL)",
     "azure: tests using Azure OpenAI (requires AZURE_OPENAI_BASE_URL, AZURE_OPENAI_API_KEY, AZURE_OPENAI_INFERENCE_MODEL)",
     "byok: tests using BYOK (Bring Your Own Knowledge) vector database alongside the standard AAP RAG",
+    "mcp: tests using controller and lightspeed MCP servers against a mock AAP",
 ]

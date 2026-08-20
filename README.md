@@ -199,6 +199,42 @@ Run a single provider:
     make test-sanity-azure
 ```
 
+### MCP sanity tests
+
+These start real Automation Controller and Lightspeed MCP servers against a
+**mock AAP** (no live AAP instance). Tool calls are expected to return HTTP 404;
+the suite checks that `lightspeed_inline_agent` tool filtering runs and that a
+failing tool call does not take the chatbot down.
+
+`make test-sanity` includes this suite. MCP tests use the same LLM provider
+variables as above and skip a provider when its credentials are unset. They also
+skip (rather than fail) if the MCP images cannot be pulled.
+
+```shell
+    # All providers that have credentials set
+    make test-sanity-mcp
+
+    # Print how many tools were in the catalog vs how many the filter kept
+    MCP_DEBUG=1 make test-sanity-mcp
+
+    # One provider
+    pytest tests/sanity/ -v -m "mcp and granite"
+```
+
+Default images ([ansible-mcp-tools](https://github.com/ansible/ansible-mcp-tools)):
+
+| Variable | Default |
+|----------|---------|
+| `MCP_CONTROLLER_IMAGE` | `quay.io/ansible/ansible-mcp-controller:latest` (port 8004) |
+| `MCP_LIGHTSPEED_IMAGE` | `quay.io/ansible/ansible-mcp-lightspeed:latest` (port 8005) |
+
+Set `MCP_IMAGE` to use one image for both containers. Override the mock AAP port
+with `MCP_AAP_MOCK_PORT` (default 18080).
+
+Ports that must be free: **8322** (chatbot), **8004** / **8005** (MCP SSE), and
+the mock AAP port. Stop any chatbot already serving on 8322 before running MCP
+tests so the sidecars are not attached to the wrong stack.
+
 ### CI
 
 The sanity tests run as a separate GitHub Actions workflow (`.github/workflows/test-sanity.yml`).
@@ -212,6 +248,7 @@ Provider credentials are stored as repository secrets with a `SANITY_` prefix:
 | `SANITY_AZURE_OPENAI_BASE_URL`, `SANITY_AZURE_OPENAI_API_KEY`, `SANITY_AZURE_OPENAI_INFERENCE_MODEL` | Azure OpenAI |
 
 Providers whose secrets are absent are skipped rather than failed.
+The workflow also pulls the MCP server images; MCP tests skip if a pull fails.
 
 ## AAP quality evaluations
 

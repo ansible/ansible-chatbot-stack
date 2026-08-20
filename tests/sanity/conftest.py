@@ -20,6 +20,8 @@ from pathlib import Path
 import pytest
 import requests
 
+from tests.sanity.mock_aap import port_is_in_use, start_mock_aap
+
 
 BASE_URL = "http://127.0.0.1:8322"
 
@@ -30,6 +32,64 @@ _AZURE_REQUIRED = ["AZURE_OPENAI_BASE_URL", "AZURE_OPENAI_API_KEY", "AZURE_OPENA
 _SANITY_DIR = Path(__file__).parent
 _LIGHTSPEED_STACK_CONFIG = str(_SANITY_DIR / "lightspeed-stack.yaml")
 _BYOK_LIGHTSPEED_STACK_CONFIG = str(_SANITY_DIR / "byok-lightspeed-stack.yaml")
+_MCP_LIGHTSPEED_STACK_CONFIG = str(_SANITY_DIR / "mcp-lightspeed-stack.yaml")
+
+_ALLOWED_RUNTIMES = ("podman", "docker")
+_IMAGE_REF_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._\-/:]{0,253}$")
+_DEFAULT_MCP_CONTROLLER_IMAGE = "quay.io/ansible/ansible-mcp-controller:latest"
+_DEFAULT_MCP_LIGHTSPEED_IMAGE = "quay.io/ansible/ansible-mcp-lightspeed:latest"
+_MCP_CONTROLLER_PORT = 8004
+_MCP_LIGHTSPEED_PORT = 8005
+_DEFAULT_MCP_AAP_MOCK_PORT = 18080
+MCP_AUTH_TOKEN = "Bearer sanity-token"
+
+# Shared chatbot log buffer so MCP tests can inspect tool-filter output.
+_CHATBOT_OUTPUT_LINES: list[str] = []
+_CHATBOT_OUTPUT_LOCK = threading.Lock()
+
+_TRUTHY = ("1", "true", "yes", "on")
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--mcp-debug",
+        action="store_true",
+        default=False,
+        help=(
+            "Print MCP tool-filter counts (tools in → tools kept). "
+            "Also enabled when MCP_DEBUG=1."
+        ),
+    )
+
+
+def mcp_debug_enabled(config=None):
+    """Return True when --mcp-debug or MCP_DEBUG is set."""
+    if os.environ.get("MCP_DEBUG", "").strip().lower() in _TRUTHY:
+        return True
+    if config is None:
+        return False
+    try:
+        return bool(config.getoption("--mcp-debug"))
+    except ValueError:
+        return False
+
+
+@pytest.fixture
+def mcp_filter_debug(request, capfd):
+    """Callable that prints a before/after tool-filter summary when debug is on."""
+
+    def _report(output_lines, query=""):
+        if not mcp_debug_enabled(request.config):
+            return
+        from tests.sanity.test_mcp import format_filter_debug
+
+        message = format_filter_debug(output_lines, query)
+        # Default capture is fd-level; write_line/print are swallowed on PASS.
+        with capfd.disabled():
+            sys.stderr.write(message + "\n")
+            sys.stderr.flush()
+
+    return _report
 
 
 def _check_required_vars(var_names):
@@ -79,6 +139,37 @@ def _build_provider_config(provider):
     return run_config, env_overrides, config
 
 
+def _build_mcp_provider_config(provider):
+    """Return MCP-enabled run config, env overrides, and provider config dict."""
+    _, env_overrides, config = _build_provider_config(provider)
+    run_config = str(_SANITY_DIR / f"mcp-{provider}-chatbot-run.yaml")
+    if not Path(run_config).exists():
+        pytest.fail(f"MCP run config not found: {run_config}")
+    if os.environ.get("INFERENCE_MODEL_FILTER"):
+        env_overrides["INFERENCE_MODEL_FILTER"] = os.environ["INFERENCE_MODEL_FILTER"]
+    return run_config, env_overrides, dict(config)
+
+
+def _get_container_runtime():
+    """Return an allowlisted container runtime path or fail the test."""
+    requested = os.environ.get("CONTAINER_RUNTIME", "")
+    if requested and requested not in _ALLOWED_RUNTIMES:
+        pytest.fail(f"CONTAINER_RUNTIME must be one of {_ALLOWED_RUNTIMES}, got: {requested!r}")
+    container_runtime = shutil.which(requested) if requested else None
+    if not container_runtime:
+        container_runtime = shutil.which("podman") or shutil.which("docker")
+    if not container_runtime:
+        pytest.fail("Container runtime (podman/docker) not found")
+    return container_runtime
+
+
+def _validate_image_ref(image):
+    """Reject image refs that could break out of the subprocess argv."""
+    if not _IMAGE_REF_RE.fullmatch(image) or ".." in image:
+        pytest.fail(f"Invalid container image reference: {image!r}")
+    return image
+
+
 def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides, provider, expected_model, byok_vector_db_path=None):  # noqa: cognitive-complexity
     """
     Start the chatbot container for a given provider config.
@@ -119,16 +210,7 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides,
         pytest.fail("llama-stack/providers.d directory not found — run 'make setup-test' first")
 
     # Resolve container runtime — allowlist prevents arbitrary command injection
-    _ALLOWED_RUNTIMES = ("podman", "docker")
-    requested = os.environ.get("CONTAINER_RUNTIME", "")
-    if requested and requested not in _ALLOWED_RUNTIMES:
-        pytest.fail(f"CONTAINER_RUNTIME must be one of {_ALLOWED_RUNTIMES}, got: {requested!r}")
-    container_runtime = shutil.which(requested) if requested else None
-    if not container_runtime:
-        container_runtime = shutil.which("podman") or shutil.which("docker")
-    if not container_runtime:
-        pytest.fail("Container runtime (podman/docker) not found")
-
+    container_runtime = _get_container_runtime()
     print(f"\n[✓] Using container runtime: {container_runtime}")
 
     # Resolve container image — validate tag to prevent tainted input reaching subprocess
@@ -203,15 +285,15 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides,
 
     cmd.append(full_image)
 
-    output_lines = []
-    output_lock = threading.Lock()
+    _CHATBOT_OUTPUT_LINES.clear()
+    output_lines = _CHATBOT_OUTPUT_LINES
 
     def _capture(pipe, prefix=""):
         try:
             for line in iter(pipe.readline, ""):
                 if line:
                     stripped = line.rstrip()
-                    with output_lock:
+                    with _CHATBOT_OUTPUT_LOCK:
                         output_lines.append(stripped)
                         print(f"{prefix}{stripped}")
         except Exception as exc:
@@ -239,7 +321,7 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides,
     last_progress = start
     while time.monotonic() < deadline:
         if process.poll() is not None:
-            with output_lock:
+            with _CHATBOT_OUTPUT_LOCK:
                 recent = output_lines[-30:] if len(output_lines) > 30 else output_lines
             sys.stderr.write(f"\n[✗] Container exited (code {process.poll()})\n")
             for line in recent:
@@ -265,7 +347,7 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides,
             last_progress = now
         time.sleep(1)
 
-    with output_lock:
+    with _CHATBOT_OUTPUT_LOCK:
         recent = output_lines[-30:] if len(output_lines) > 30 else output_lines
     sys.stderr.write(f"\n[✗] Server did not start within {max_wait}s\n")
     for line in recent:
@@ -315,6 +397,232 @@ def _stop_sanity_server(process, container_runtime, container_name):
                 )
                 return
             time.sleep(1)
+
+
+def _mcp_images():
+    """
+    Resolve controller and lightspeed MCP image refs.
+
+    quay.io/ansible/ansible-mcp-tool is not publicly pullable; the published
+    images are ansible-mcp-controller and ansible-mcp-lightspeed. Set MCP_IMAGE
+    to force a single dual-service image for both containers.
+    """
+    unified = os.environ.get("MCP_IMAGE", "").strip()
+    if unified:
+        image = _validate_image_ref(unified)
+        return image, image
+    controller = os.environ.get("MCP_CONTROLLER_IMAGE", _DEFAULT_MCP_CONTROLLER_IMAGE)
+    lightspeed = os.environ.get("MCP_LIGHTSPEED_IMAGE", _DEFAULT_MCP_LIGHTSPEED_IMAGE)
+    return _validate_image_ref(controller), _validate_image_ref(lightspeed)
+
+
+def _ensure_image(container_runtime, image):
+    """Pull image if missing; skip the MCP suite when the registry is unavailable."""
+    inspect = subprocess.run(
+        [container_runtime, "image", "inspect", image],
+        capture_output=True,
+    )
+    if inspect.returncode == 0:
+        print(f"[✓] MCP image present: {image}")
+        return
+    print(f"[⚙] Pulling MCP image {image}...")
+    try:
+        pull = subprocess.run(
+            [container_runtime, "pull", image],
+            capture_output=True,
+            text=True,
+            timeout=180,
+        )
+    except subprocess.TimeoutExpired:
+        pytest.skip(f"Timed out pulling MCP image {image}")
+    if pull.returncode != 0:
+        detail = (pull.stderr or pull.stdout or "").strip()[-400:]
+        pytest.skip(f"Could not pull MCP image {image}: {detail}")
+    print(f"[✓] Pulled MCP image {image}")
+
+
+def _assert_port_free(port, label):
+    if port_is_in_use(port):
+        pytest.fail(
+            f"{label} port {port} is already in use. "
+            "Stop the existing process/container before MCP sanity tests."
+        )
+
+
+def _wait_for_tcp(port, timeout=60, label="service"):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if port_is_in_use(port):
+            print(f"[✓] {label} listening on port {port}")
+            return
+        time.sleep(0.5)
+    pytest.fail(f"{label} did not listen on port {port} within {timeout}s")
+
+
+def _start_mcp_container(container_runtime, image, name, port, aap_url):
+    """Start one MCP server on the host network. Returns process, env file, log file, and log handle."""
+    env_file = tempfile.NamedTemporaryFile("w", suffix=".env", delete=False)
+    env_file_path = env_file.name
+    try:
+        env_file.write(f"AAP_GATEWAY_URL={aap_url}\n")
+        env_file.write(f"AAP_SERVICE_URL={aap_url}\n")
+        env_file.write("HOST=0.0.0.0\n")
+        env_file.write(f"PORT={port}\n")
+        env_file.write("PYTHONUNBUFFERED=1\n")
+    finally:
+        env_file.close()
+    os.chmod(env_file_path, 0o600)
+
+    # MCP servers log OpenAPI parsing at DEBUG (~tens of thousands of lines).
+    # Keep that off the pytest console; dump a tail only on failure.
+    log_file = tempfile.NamedTemporaryFile("w", suffix=".log", delete=False)
+    log_file_path = log_file.name
+    log_file.close()
+    log_handle = open(log_file_path, "w", encoding="utf-8")
+
+    cmd = [
+        container_runtime, "run",
+        "--rm",
+        "--name", name,
+        "--platform", "linux/amd64",
+        "--security-opt", "label=disable",
+        "--network", "host",
+        "--env-file", env_file_path,
+        image,
+    ]
+    print(f"[⚙] Starting MCP container {name} ({image}) on port {port}")
+    try:
+        process = subprocess.Popen(
+            cmd,
+            stdout=log_handle,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+    except Exception:
+        log_handle.close()
+        try:
+            os.unlink(log_file_path)
+            os.unlink(env_file_path)
+        except OSError:
+            pass
+        raise
+    return process, env_file_path, log_file_path, log_handle
+
+
+def _dump_mcp_log_tail(name, log_file_path, lines=40):
+    if not log_file_path or not Path(log_file_path).exists():
+        return
+    try:
+        text = Path(log_file_path).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return
+    tail = text.splitlines()[-lines:]
+    if not tail:
+        return
+    sys.stderr.write(f"\n[✗] Last {len(tail)} log lines from {name}:\n")
+    for line in tail:
+        sys.stderr.write(line + "\n")
+
+
+def _stop_mcp_container(process, container_runtime, name, env_file_path, log_file_path=None, log_handle=None):
+    if process and process.poll() is None:
+        print(f"[⏹] Stopping MCP container {name}...")
+        try:
+            process.terminate()
+            process.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            process.kill()
+    if container_runtime and name:
+        subprocess.run([container_runtime, "rm", "-f", name], capture_output=True, timeout=20)
+    if log_handle:
+        try:
+            log_handle.close()
+        except OSError:
+            pass
+    if env_file_path:
+        try:
+            os.unlink(env_file_path)
+        except OSError:
+            pass
+    if log_file_path:
+        try:
+            os.unlink(log_file_path)
+        except OSError:
+            pass
+
+
+def _start_mcp_servers(aap_url):  # noqa: cognitive-complexity
+    """Pull and start controller + lightspeed MCP servers. Returns handle list."""
+    container_runtime = _get_container_runtime()
+    controller_image, lightspeed_image = _mcp_images()
+    _ensure_image(container_runtime, controller_image)
+    _ensure_image(container_runtime, lightspeed_image)
+
+    _assert_port_free(_MCP_CONTROLLER_PORT, "MCP controller")
+    _assert_port_free(_MCP_LIGHTSPEED_PORT, "MCP lightspeed")
+
+    pid = os.getpid()
+    handles = []
+    controller_name = f"ansible-mcp-controller-sanity-{pid}"
+    lightspeed_name = f"ansible-mcp-lightspeed-sanity-{pid}"
+
+    process, env_file, log_file, log_handle = _start_mcp_container(
+        container_runtime, controller_image, controller_name,
+        _MCP_CONTROLLER_PORT, aap_url,
+    )
+    handles.append((process, container_runtime, controller_name, env_file, log_file, log_handle))
+    process, env_file, log_file, log_handle = _start_mcp_container(
+        container_runtime, lightspeed_image, lightspeed_name,
+        _MCP_LIGHTSPEED_PORT, aap_url,
+    )
+    handles.append((process, container_runtime, lightspeed_name, env_file, log_file, log_handle))
+
+    try:
+        for process, _runtime, name, _env, log_file, _lh in handles:
+            deadline = time.monotonic() + 45
+            port = _MCP_CONTROLLER_PORT if "controller" in name else _MCP_LIGHTSPEED_PORT
+            while time.monotonic() < deadline:
+                if process.poll() is not None:
+                    _dump_mcp_log_tail(name, log_file)
+                    pytest.fail(f"MCP container {name} exited during startup (code {process.poll()})")
+                if port_is_in_use(port):
+                    break
+                time.sleep(0.5)
+        _wait_for_tcp(_MCP_CONTROLLER_PORT, timeout=60, label="MCP controller")
+        _wait_for_tcp(_MCP_LIGHTSPEED_PORT, timeout=60, label="MCP lightspeed")
+    except Exception:
+        for process, runtime, name, env_file, log_file, log_handle in handles:
+            _dump_mcp_log_tail(name, log_file)
+            _stop_mcp_container(process, runtime, name, env_file, log_file, log_handle)
+        raise
+    return handles
+
+
+def _stop_mcp_servers(handles):
+    for item in reversed(handles or []):
+        process, runtime, name, env_file, *rest = item
+        log_file = rest[0] if rest else None
+        log_handle = rest[1] if len(rest) > 1 else None
+        _stop_mcp_container(process, runtime, name, env_file, log_file, log_handle)
+
+
+def _start_mock_aap_for_sanity():
+    requested = os.environ.get("MCP_AAP_MOCK_PORT", "").strip()
+    if requested:
+        try:
+            port = int(requested)
+        except ValueError:
+            pytest.fail(f"MCP_AAP_MOCK_PORT must be an integer, got: {requested!r}")
+        if port_is_in_use(port):
+            pytest.fail(f"Mock AAP port {port} is already in use")
+        mock = start_mock_aap(port)
+    elif port_is_in_use(_DEFAULT_MCP_AAP_MOCK_PORT):
+        print(f"[⚙] Default mock AAP port {_DEFAULT_MCP_AAP_MOCK_PORT} busy — using ephemeral port")
+        mock = start_mock_aap(0)
+    else:
+        mock = start_mock_aap(_DEFAULT_MCP_AAP_MOCK_PORT)
+    print(f"[✓] Mock AAP listening at {mock.url}")
+    return mock
 
 
 # ---------------------------------------------------------------------------
@@ -385,6 +693,56 @@ def byok_provider_setup(request):
                 os.unlink(env_file_path)
             except OSError:
                 pass
+
+
+@pytest.fixture(
+    params=[
+        pytest.param("granite", marks=[pytest.mark.granite, pytest.mark.mcp]),
+        pytest.param("openai", marks=[pytest.mark.openai_live, pytest.mark.mcp]),
+        pytest.param("azure", marks=[pytest.mark.azure, pytest.mark.mcp]),
+    ],
+    scope="module",
+)
+def mcp_provider_setup(request):
+    """
+    Start mock AAP, controller/lightspeed MCP servers, and the chatbot with MCP enabled.
+
+    Yields a dict with keys 'model', 'provider', 'mock_aap', and 'output_lines'.
+    Skips when inference env vars are missing or MCP images cannot be pulled.
+    """
+    try:
+        resp = requests.get(f"{BASE_URL}/v1/config", timeout=2)
+        if resp.status_code == 200:
+            pytest.fail(
+                f"Chatbot already running at {BASE_URL}. "
+                "Stop it before MCP sanity tests so MCP sidecars can be attached."
+            )
+    except requests.exceptions.RequestException:
+        pass
+
+    provider = request.param
+    run_config, env_overrides, config = _build_mcp_provider_config(provider)
+    mock_aap = _start_mock_aap_for_sanity()
+    mcp_handles = []
+    process = runtime = name = env_file_path = None
+    try:
+        mcp_handles = _start_mcp_servers(mock_aap.url)
+        process, runtime, name, env_file_path = _start_sanity_server(
+            run_config, _MCP_LIGHTSPEED_STACK_CONFIG, env_overrides,
+            provider=f"mcp-{provider}", expected_model=config["model"],
+        )
+        config["mock_aap"] = mock_aap
+        config["output_lines"] = _CHATBOT_OUTPUT_LINES
+        yield config
+    finally:
+        _stop_sanity_server(process, runtime, name)
+        if env_file_path:
+            try:
+                os.unlink(env_file_path)
+            except OSError:
+                pass
+        _stop_mcp_servers(mcp_handles)
+        mock_aap.stop()
 
 
 @pytest.fixture(scope="session")

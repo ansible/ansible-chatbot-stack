@@ -32,7 +32,7 @@ endif
 
 
 
-.PHONY: help setup setup-test build build-custom run clean all deploy-k8s shell tag-and-push test update-lock test-sanity-byok
+.PHONY: help setup setup-test build build-custom run clean all deploy-k8s shell tag-and-push test update-lock test-sanity-byok test-sanity-mcp
 
 .EXPORT_ALL_VARIABLES:
 
@@ -65,6 +65,8 @@ help:
 	@echo "  test-sanity-openai  - Run real OpenAI sanity tests"
 	@echo "  test-sanity-azure   - Run Azure OpenAI sanity tests"
 	@echo "  test-sanity-byok    - Run BYOK sanity tests (requires inference provider env vars)"
+	@echo "  test-sanity-mcp     - Run MCP sanity tests (requires inference provider env vars + MCP images)"
+	@echo "                        Set MCP_DEBUG=1 to print tool-filter before/after counts"
 	@echo ""
 	@echo "Required Environment variables:"
 	@echo "  ANSIBLE_CHATBOT_VERSION                - Version tag for the image (default: $(ANSIBLE_CHATBOT_VERSION))"
@@ -308,3 +310,7 @@ test-sanity-azure:
 test-sanity-byok:
 	@echo "Running BYOK sanity tests (requires inference provider env vars + byok_vector_db/)..."
 	uv run --frozen --group test pytest tests/sanity/ -v -m byok
+
+test-sanity-mcp:
+	@echo "Running MCP sanity tests (requires inference provider env vars + MCP images)..."
+	uv run --frozen --group test pytest tests/sanity/ -v -m mcp $(if $(filter 1 true yes,$(MCP_DEBUG)),--mcp-debug -s,)

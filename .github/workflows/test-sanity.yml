@@ -33,6 +33,9 @@ jobs:
       AZURE_OPENAI_BASE_URL: ${{ secrets.SANITY_AZURE_OPENAI_BASE_URL }}
       AZURE_OPENAI_API_KEY: ${{ secrets.SANITY_AZURE_OPENAI_API_KEY }}
       AZURE_OPENAI_INFERENCE_MODEL: ${{ secrets.SANITY_AZURE_OPENAI_INFERENCE_MODEL }}
+      # MCP servers — tests skip if images cannot be pulled
+      MCP_CONTROLLER_IMAGE: quay.io/ansible/ansible-mcp-controller:latest
+      MCP_LIGHTSPEED_IMAGE: quay.io/ansible/ansible-mcp-lightspeed:latest
 
     steps:
       - name: Free up disk space
@@ -96,6 +99,13 @@ jobs:
 
       - name: Verify container image
         run: podman images ${{ steps.build-image.outputs.image-with-tag }}
+
+      - name: Pull MCP server images
+        run: |
+          podman pull "$MCP_CONTROLLER_IMAGE" \
+            || echo "::warning::Could not pull controller MCP image — MCP tests will skip"
+          podman pull "$MCP_LIGHTSPEED_IMAGE" \
+            || echo "::warning::Could not pull lightspeed MCP image — MCP tests will skip"
 
       - name: Run sanity tests
         run: uv run --frozen --group test pytest tests/sanity/ -v -s --tb=long
