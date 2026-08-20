@@ -39,6 +39,8 @@ _MCP_LIGHTSPEED_STACK_CONFIG = str(_SANITY_DIR / "mcp-lightspeed-stack.yaml")
 _GRANITE_SYSTEM_PROMPT_FILE = "ansible-chatbot-system-prompt-granite-compat.txt"
 _DEFAULT_SYSTEM_PROMPT_FILE = "ansible-chatbot-system-prompt.txt"
 
+_PROVIDER_VECTOR_DB_ID_FILE = "provider_vector_db_id.ind"
+
 _ALLOWED_RUNTIMES = ("podman", "docker")
 _IMAGE_REF_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._\-/:]{0,253}$")
 _DEFAULT_MCP_CONTROLLER_IMAGE = "quay.io/ansible/ansible-mcp-controller:latest"
@@ -229,7 +231,7 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides,
     if byok_vector_db_path and not (_TEST_DATA_DIR / byok_vector_db_path / "faiss_store.db").exists():
         pytest.fail(f".test_data/{byok_vector_db_path}/faiss_store.db not found — run 'make setup-sanity-test-data' first")
     if byok_vector_db_path and not os.environ.get("BYOK_PROVIDER_VECTOR_DB_ID"):
-        byok_ind_path = _TEST_DATA_DIR / byok_vector_db_path / "provider_vector_db_id.ind"
+        byok_ind_path = _TEST_DATA_DIR / byok_vector_db_path / _PROVIDER_VECTOR_DB_ID_FILE
         if not byok_ind_path.exists() or not byok_ind_path.read_text().strip():
             pytest.fail(
                 f"{byok_ind_path} missing or empty — BYOK_PROVIDER_VECTOR_DB_ID would resolve "
@@ -264,7 +266,7 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides,
     selinux_flag = ":z"
 
     provider_vector_db_id = os.environ.get("PROVIDER_VECTOR_DB_ID", "aap-product-docs-2_6")
-    vid_file = _TEST_DATA_DIR / "vector_db" / "provider_vector_db_id.ind"
+    vid_file = _TEST_DATA_DIR / "vector_db" / _PROVIDER_VECTOR_DB_ID_FILE
     if vid_file.exists() and not os.environ.get("PROVIDER_VECTOR_DB_ID"):
         try:
             provider_vector_db_id = vid_file.read_text().strip()
@@ -301,7 +303,7 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides,
     ]
 
     if byok_vector_db_path:
-        byok_vid_file = _TEST_DATA_DIR / byok_vector_db_path / "provider_vector_db_id.ind"
+        byok_vid_file = _TEST_DATA_DIR / byok_vector_db_path / _PROVIDER_VECTOR_DB_ID_FILE
         byok_vector_db_id = os.environ.get("BYOK_PROVIDER_VECTOR_DB_ID", "")
         if byok_vid_file.exists() and not byok_vector_db_id:
             try:
