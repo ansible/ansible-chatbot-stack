@@ -36,7 +36,6 @@ class MockAAPHandler(BaseHTTPRequestHandler):
 
     def log_message(self, format, *args):  # noqa: A003
         """Keep pytest output readable; recorded requests live on the server."""
-        return
 
     def _record(self):
         entry = {
@@ -48,41 +47,43 @@ class MockAAPHandler(BaseHTTPRequestHandler):
         with self.server.log_lock:
             self.server.request_log.append(entry)
 
-    def _send_json(self, status, payload):
+    def _send_json(self, status, payload, write_body=True):
         body = json.dumps(payload).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        if write_body:
+            self.wfile.write(body)
 
-    def _send_text(self, status, text, content_type="text/plain"):
+    def _send_text(self, status, text, content_type="text/plain", write_body=True):
         body = text.encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        if write_body:
+            self.wfile.write(body)
 
-    def _handle(self):
+    def _handle(self, write_body=True):
         length = int(self.headers.get("Content-Length", "0") or "0")
         if length:
             self.rfile.read(length)
         self._record()
         path = urlparse(self.path).path
         if path in _GATEWAY_ME_PATHS:
-            self._send_json(200, {"results": [{"username": SANITY_USERNAME}]})
+            self._send_json(200, {"results": [{"username": SANITY_USERNAME}]}, write_body=write_body)
             return
         if path in _GATEWAY_JWT_PATHS:
-            self._send_text(200, _DUMMY_JWT_KEY)
+            self._send_text(200, _DUMMY_JWT_KEY, write_body=write_body)
             return
-        self._send_json(404, {"detail": "mock AAP has no such resource"})
+        self._send_json(404, {"detail": "mock AAP has no such resource"}, write_body=write_body)
 
     def do_GET(self):
         self._handle()
 
     def do_HEAD(self):
-        self._handle()
+        self._handle(write_body=False)
 
     def do_POST(self):
         self._handle()

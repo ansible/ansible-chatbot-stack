@@ -9,139 +9,163 @@ This script:
 This allows tests to run without needing access to private container registries.
 """
 
+import asyncio
 import os
 import sys
-import json
-import sqlite3
-import pickle
 from pathlib import Path
 
 
 def setup_embeddings_model(target_dir: Path):
     """Download the public embeddings model from HuggingFace."""
+    import shutil
     from sentence_transformers import SentenceTransformer
-    
+
     print(f"📦 Downloading embeddings model...")
-    
+
     model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
-    
-    # Save to target directory
+
+    # Wipe any existing directory first: model.save() does not clear stale
+    # files, so a leftover file from a previous model revision (e.g. an old
+    # vocab.txt paired with a newer model.safetensors) can silently persist
+    # and produce a tokenizer/model vocab mismatch at inference time.
+    if target_dir.exists():
+        shutil.rmtree(target_dir)
     target_dir.mkdir(parents=True, exist_ok=True)
     model.save(str(target_dir))
-    
+
+    # SentenceTransformer.save() can leave weight files (e.g. model.safetensors)
+    # with the restrictive mode HuggingFace's cache stores them under (owner-only),
+    # while the chatbot container reads this directory as a different, non-matching
+    # UID. Force everything readable/traversable so the container can load it.
+    for root, dirs, files in os.walk(target_dir):
+        for d in dirs:
+            (Path(root) / d).chmod(0o777)
+        for f in files:
+            (Path(root) / f).chmod(0o666)
+
     print(f"✅ Embeddings model saved")
     return model
+
+
+async def _write_faiss_vector_db(db_path: Path, model, vector_store_id: str, documents: list):
+    """
+    Populate a kvstore SQLite file using llama-stack's own FaissIndex/SqliteKVStoreImpl
+    classes, rather than hand-rolling the key/value schema.
+
+    A previous version of this script wrote its own key names (e.g. "<id>:faiss_index")
+    with pickled Python dicts. That schema doesn't match what llama-stack's inline::faiss
+    provider actually reads (keys prefixed "vector_stores:v3::" / "faiss_index:v3::",
+    values that are VectorStore/EmbeddedChunk JSON) — so the fixture data was silently
+    never loaded at query time. Driving the real classes guarantees the on-disk format
+    always matches whatever llama-stack version is installed.
+    """
+    from llama_stack.core.storage.datatypes import SqliteKVStoreConfig
+    from llama_stack.core.storage.kvstore.sqlite.sqlite import SqliteKVStoreImpl
+    from llama_stack.providers.inline.vector_io.faiss.faiss import VECTOR_DBS_PREFIX, FaissIndex
+    from llama_stack_api import ChunkMetadata, EmbeddedChunk, VectorStore
+
+    if db_path.exists():
+        db_path.unlink()
+
+    texts = [doc["content"] for doc in documents]
+    embeddings = model.encode(texts)
+    dimension = int(embeddings.shape[1])
+
+    kvstore = SqliteKVStoreImpl(SqliteKVStoreConfig(db_path=str(db_path)))
+    await kvstore.initialize()
+
+    # Pre-register the vector store itself. The chatbot container also (re-)registers
+    # this from its own YAML config at startup, but writing it here means the fixture
+    # is immediately self-contained and loadable without relying on that timing.
+    vector_store = VectorStore(
+        identifier=vector_store_id,
+        provider_id="aap_faiss",
+        provider_resource_id=vector_store_id,
+        embedding_model=vector_store_id,
+        embedding_dimension=dimension,
+    )
+    await kvstore.set(
+        key=f"{VECTOR_DBS_PREFIX}{vector_store_id}",
+        value=vector_store.model_dump_json(),
+    )
+
+    index = await FaissIndex.create(dimension, kvstore, vector_store_id)
+    embedded_chunks = [
+        EmbeddedChunk(
+            content=doc["content"],
+            chunk_id=f"{vector_store_id}-chunk-{i}",
+            metadata=doc["metadata"],
+            chunk_metadata=ChunkMetadata(document_id=doc["metadata"].get("document_id", vector_store_id)),
+            embedding=[float(x) for x in embeddings[i]],
+            embedding_model=vector_store_id,
+            embedding_dimension=dimension,
+        )
+        for i, doc in enumerate(documents)
+    ]
+    await index.add_chunks(embedded_chunks)
+    return dimension
 
 
 def setup_vector_db(target_dir: Path, model, provider_id: str):
     """
     Create a minimal FAISS vector database in llama-stack's SQLite kvstore format.
-    
+
     llama-stack's inline::faiss provider uses SQLite to store:
     - The FAISS index (serialized)
     - Document metadata and chunks
     """
-    import faiss
-    import numpy as np
-    
     print(f"📦 Creating vector database in {target_dir}...")
-    
+
     # Dummy AAP documentation content
+    # document_id is required: llama-stack's citation-building code keys a
+    # dict by chunk.metadata["document_id"], and a missing key resolves to
+    # None, producing an invalid {None: filename} dict that fails Pydantic
+    # validation on ToolExecutionResult.citation_files and 500s the request.
     documents = [
         {
             "content": "AAP stands for Ansible Automation Platform. It is a comprehensive enterprise automation solution by Red Hat.",
-            "metadata": {"source": "test", "chunk_id": "0"}
+            "metadata": {"source": "test", "document_id": "test-doc-0", "chunk_id": "0"}
         },
         {
             "content": "Ansible Automation Platform provides automation capabilities for IT operations, cloud provisioning, and configuration management.",
-            "metadata": {"source": "test", "chunk_id": "1"}
+            "metadata": {"source": "test", "document_id": "test-doc-1", "chunk_id": "1"}
         },
         {
             "content": "Key components of AAP include Automation Controller, Automation Hub, and Event-Driven Ansible.",
-            "metadata": {"source": "test", "chunk_id": "2"}
+            "metadata": {"source": "test", "document_id": "test-doc-2", "chunk_id": "2"}
         },
         {
             "content": "Ansible EDA (Event-Driven Ansible) enables automated responses to events from various IT sources.",
-            "metadata": {"source": "test", "chunk_id": "3"}
+            "metadata": {"source": "test", "document_id": "test-doc-3", "chunk_id": "3"}
         },
         {
             "content": "Automation Controller is the web UI and API for managing Ansible automation at scale.",
-            "metadata": {"source": "test", "chunk_id": "4"}
+            "metadata": {"source": "test", "document_id": "test-doc-4", "chunk_id": "4"}
         },
     ]
-    
-    # Create embeddings
-    print("  Creating embeddings for dummy documents...")
-    texts = [doc["content"] for doc in documents]
-    embeddings = model.encode(texts)
-    
-    # Create FAISS index
-    dimension = embeddings.shape[1]
-    index = faiss.IndexFlatL2(dimension)
-    index.add(embeddings.astype(np.float32))
-    
-    # Serialize FAISS index
-    faiss_bytes = faiss.serialize_index(index)
-    
-    # Create SQLite database in llama-stack's format
+
     target_dir.mkdir(parents=True, exist_ok=True)
     db_path = target_dir / "aap_faiss_store.db"
-    
-    # Remove existing database
-    if db_path.exists():
-        db_path.unlink()
-    
-    conn = sqlite3.connect(str(db_path))
-    cursor = conn.cursor()
-    
-    # Create the kvstore table that llama-stack expects
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS kvstore (
-            key TEXT PRIMARY KEY,
-            value BLOB
-        )
-    """)
-    
-    # Store the FAISS index
-    cursor.execute(
-        "INSERT OR REPLACE INTO kvstore (key, value) VALUES (?, ?)",
-        (f"{provider_id}:faiss_index", faiss_bytes.tobytes())
-    )
-    
-    # Store document chunks with their metadata
-    for i, doc in enumerate(documents):
-        chunk_key = f"{provider_id}:chunk:{i}"
-        chunk_data = {
-            "content": doc["content"],
-            "metadata": doc["metadata"],
-            "embedding_index": i
-        }
-        cursor.execute(
-            "INSERT OR REPLACE INTO kvstore (key, value) VALUES (?, ?)",
-            (chunk_key, pickle.dumps(chunk_data))
-        )
-    
-    # Store metadata about the vector DB
-    db_metadata = {
-        "num_chunks": len(documents),
-        "dimension": dimension,
-        "provider_id": provider_id
-    }
-    cursor.execute(
-        "INSERT OR REPLACE INTO kvstore (key, value) VALUES (?, ?)",
-        (f"{provider_id}:metadata", pickle.dumps(db_metadata))
-    )
-    
-    conn.commit()
-    conn.close()
-    
+
+    print("  Creating embeddings for dummy documents...")
+    dimension = asyncio.run(_write_faiss_vector_db(db_path, model, provider_id, documents))
+
+    # The chatbot container runs as a non-root UID (1001) that won't own these
+    # host-created files, and llama-stack's FAISS provider writes to the kvstore
+    # at startup (vector-store registration). SQLite also needs to create a
+    # rollback-journal file next to the .db file for every write transaction,
+    # so the *directory* must be writable too, not just the .db file itself —
+    # otherwise both fail with "attempt to write a readonly database".
+    db_path.chmod(0o666)
+    target_dir.chmod(0o777)
+
     # Create provider ID file
     (target_dir / "provider_vector_db_id.ind").write_text(provider_id)
-    
+
     print(f"✅ Vector database created: {db_path}")
     print(f"   - {len(documents)} documents indexed")
     print(f"   - Embedding dimension: {dimension}")
-    
+
     return provider_id
 
 
@@ -153,77 +177,36 @@ def setup_byok_vector_db(target_dir: Path, model, vector_store_id: str):
     distinctive content that the standard AAP docs do not contain, so
     test_byok_vector_db_retrieval can verify BYOK retrieval specifically.
     """
-    import faiss
-    import numpy as np
-
     print(f"📦 Creating BYOK vector database in {target_dir}...")
 
+    # A single chunk, not three: "What is AnsibleByokPlugin?" retrieves whichever
+    # chunk scores highest, and a plain definitional sentence alone consistently
+    # outranks the ones carrying the distinctive facts (version, capabilities) that
+    # test_byok_vector_db_retrieval checks for. Keeping all of it in one chunk means
+    # retrieval doesn't depend on top-k/relevance-cutoff luck to surface those facts.
     documents = [
         {
-            "content": "AnsibleByokPlugin is a fictional automation plugin used exclusively for BYOK sanity testing.",
-            "metadata": {"source": "byok-test", "chunk_id": "0"}
-        },
-        {
-            "content": "The AnsibleByokPlugin integrates custom knowledge sources into ansible-chatbot-stack via BYOK.",
-            "metadata": {"source": "byok-test", "chunk_id": "1"}
-        },
-        {
-            "content": "AnsibleByokPlugin version 1.0 supports real-time event processing and dynamic knowledge retrieval.",
-            "metadata": {"source": "byok-test", "chunk_id": "2"}
+            "content": (
+                "AnsibleByokPlugin is a fictional automation plugin used exclusively "
+                "for BYOK sanity testing. It integrates custom knowledge sources into "
+                "ansible-chatbot-stack via BYOK. AnsibleByokPlugin version 1.0 supports "
+                "real-time event processing and dynamic knowledge retrieval."
+            ),
+            "metadata": {"source": "byok-test", "document_id": "byok-test-doc-0", "chunk_id": "0"}
         },
     ]
-
-    texts = [doc["content"] for doc in documents]
-    embeddings = model.encode(texts)
-
-    dimension = embeddings.shape[1]
-    index = faiss.IndexFlatL2(dimension)
-    index.add(embeddings.astype(np.float32))
-
-    faiss_bytes = faiss.serialize_index(index)
 
     target_dir.mkdir(parents=True, exist_ok=True)
     db_path = target_dir / "faiss_store.db"
 
-    if db_path.exists():
-        db_path.unlink()
+    dimension = asyncio.run(_write_faiss_vector_db(db_path, model, vector_store_id, documents))
 
-    with sqlite3.connect(str(db_path)) as conn:
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS kvstore (
-                key TEXT PRIMARY KEY,
-                value BLOB
-            )
-        """)
-
-        cursor.execute(
-            "INSERT OR REPLACE INTO kvstore (key, value) VALUES (?, ?)",
-            (f"{vector_store_id}:faiss_index", faiss_bytes.tobytes())
-        )
-
-        for i, doc in enumerate(documents):
-            chunk_key = f"{vector_store_id}:chunk:{i}"
-            chunk_data = {
-                "content": doc["content"],
-                "metadata": doc["metadata"],
-                "embedding_index": i
-            }
-            cursor.execute(
-                "INSERT OR REPLACE INTO kvstore (key, value) VALUES (?, ?)",
-                (chunk_key, pickle.dumps(chunk_data))
-            )
-
-        db_metadata = {
-            "num_chunks": len(documents),
-            "dimension": dimension,
-            "provider_id": vector_store_id
-        }
-        cursor.execute(
-            "INSERT OR REPLACE INTO kvstore (key, value) VALUES (?, ?)",
-            (f"{vector_store_id}:metadata", pickle.dumps(db_metadata))
-        )
+    # See setup_vector_db()'s matching chmod: the chatbot container runs as a
+    # non-root UID and needs write access to this host-created file, and to
+    # the containing directory (SQLite creates a rollback-journal file there
+    # on every write transaction).
+    db_path.chmod(0o666)
+    target_dir.chmod(0o777)
 
     (target_dir / "provider_vector_db_id.ind").write_text(vector_store_id)
 

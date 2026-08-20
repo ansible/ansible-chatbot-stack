@@ -210,6 +210,23 @@ failing tool call does not take the chatbot down.
 variables as above and skip a provider when its credentials are unset. They also
 skip (rather than fail) if the MCP images cannot be pulled.
 
+**Granite (vLLM) requires tool-calling enabled on the server, and the granite-compat
+system prompt.** Two things must both be true for granite to actually invoke a tool:
+
+1. `vllm serve` must be started with `--enable-auto-tool-choice` and a matching
+   `--tool-call-parser`, otherwise the model's tool-call output is never parsed into
+   an executable call, regardless of what the system prompt says. See
+   [vLLM's tool calling docs](https://docs.vllm.ai/en/latest/features/tool_calling.html)
+   for the parser name matching your Granite model/vLLM version.
+2. The chatbot must be running with `ansible-chatbot-system-prompt-granite-compat.txt`
+   (see [System Prompt](#system-prompt) above) — it instructs the model to emit the
+   literal `<|tool_call|>[...]` format the vLLM parser looks for. The sanity fixtures
+   select this automatically for the `granite` provider.
+
+If either is missing, the chatbot still logs the tool as filtered-in and available,
+but no request ever reaches the MCP server or mock AAP, and
+`test_tool_call_error_is_handled` fails.
+
 ```shell
     # All providers that have credentials set
     make test-sanity-mcp
@@ -234,6 +251,12 @@ with `MCP_AAP_MOCK_PORT` (default 18080).
 Ports that must be free: **8322** (chatbot), **8004** / **8005** (MCP SSE), and
 the mock AAP port. Stop any chatbot already serving on 8322 before running MCP
 tests so the sidecars are not attached to the wrong stack.
+
+**Linux only in practice:** the mock AAP binds `127.0.0.1` on the host while
+the MCP containers run with `--network host`. On Linux both share the same
+network namespace, so the containers can reach the mock. Under podman-machine
+on macOS, `--network host` is the *VM's* host network, so the MCP containers
+cannot reach a mock bound on the Mac host, and this suite times out.
 
 ### CI
 

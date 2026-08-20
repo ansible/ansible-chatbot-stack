@@ -25,10 +25,12 @@ import socket
 import pytest
 import requests
 
+from tests.sanity.conftest import _CHATBOT_OUTPUT_LOCK, MCP_AUTH_TOKEN
+
 MCP_HEADERS = json.dumps(
     {
-        "mcp::aap-controller": {"X-Authorization": "Bearer sanity-token"},
-        "mcp::aap-lightspeed": {"X-Authorization": "Bearer sanity-token"},
+        "mcp::aap-controller": {"X-Authorization": MCP_AUTH_TOKEN},
+        "mcp::aap-lightspeed": {"X-Authorization": MCP_AUTH_TOKEN},
     }
 )
 
@@ -102,6 +104,31 @@ def _filtered_tool_names(output_lines):
     return names
 
 
+def _always_included_tools(output_lines):
+    """
+    Parse 'Always included tools (config + previously called): {...}' lines.
+
+    knowledge_search is injected here, outside the LLM-driven filter step, so it
+    never appears in 'Filtered tool names from LLM:' — that line only carries the
+    subset of MCP tools the LLM chose to keep, which is legitimately empty ([])
+    when a query needs no controller/lightspeed tool.
+    """
+    marker = "Always included tools (config + previously called):"
+    for line in output_lines:
+        if marker not in line:
+            continue
+        _, _, rest = line.partition(marker)
+        rest = rest.strip()
+        try:
+            parsed = ast.literal_eval(rest)
+        except (ValueError, SyntaxError):
+            continue
+        if isinstance(parsed, (set, list, tuple)):
+            return {str(item) for item in parsed}
+        return {str(parsed)}
+    return set()
+
+
 def _filtering_enabled_count(output_lines):
     """Return the largest 'filtering N tools' count logged by the inline agent."""
     counts = []
@@ -172,9 +199,22 @@ def format_filter_debug(output_lines, query=""):
     )
 
 
+def _lines_len(output_lines):
+    with _CHATBOT_OUTPUT_LOCK:
+        return len(output_lines)
+
+
+def _lines_from(output_lines, start):
+    with _CHATBOT_OUTPUT_LOCK:
+        return list(output_lines[start:])
+
+
 def _tcp_open(port):
-    with socket.create_connection(("127.0.0.1", port), timeout=2):
-        return True
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=2):
+            return True
+    except OSError:
+        return False
 
 
 class TestMCPSanity:
@@ -202,7 +242,7 @@ class TestMCPSanity:
         """Controller+Lightspeed tool lists exceed min_tools, so filtering must run."""
         mock_aap = mcp_provider_setup["mock_aap"]
         output_lines = mcp_provider_setup["output_lines"]
-        start = len(output_lines)
+        start = _lines_len(output_lines)
         mock_aap.clear()
         response = _post_query(
             base_url,
@@ -213,7 +253,7 @@ class TestMCPSanity:
             f"Expected 200, got {response.status_code}: {response.text}"
         )
 
-        new_lines = output_lines[start:]
+        new_lines = _lines_from(output_lines, start)
         count = _filtering_enabled_count(new_lines)
         logs = _joined_logs(new_lines)
         assert "Skipping MCP server" not in logs, (
@@ -233,7 +273,7 @@ class TestMCPSanity:
     ):
         mock_aap = mcp_provider_setup["mock_aap"]
         output_lines = mcp_provider_setup["output_lines"]
-        start = len(output_lines)
+        start = _lines_len(output_lines)
         mock_aap.clear()
         response = _post_query(
             base_url,
@@ -244,22 +284,25 @@ class TestMCPSanity:
             f"Expected 200, got {response.status_code}: {response.text}"
         )
 
-        new_lines = output_lines[start:]
+        new_lines = _lines_from(output_lines, start)
         names = [n.lower() for n in _filtered_tool_names(new_lines)]
-        logs = _joined_logs(new_lines).lower()
+        joined_names = " ".join(names)
         tool_paths = [entry["path"].lower() for entry in mock_aap.tool_requests()]
 
         family_hit = (
-            any(hint in " ".join(names) for hint in _CONTROLLER_HINTS)
-            or any(hint in logs for hint in _CONTROLLER_HINTS)
+            any(hint in joined_names for hint in _CONTROLLER_HINTS)
             or any("job_template" in path or "/api/v2/" in path for path in tool_paths)
         )
         mcp_filter_debug(
             new_lines, "List the job templates available in automation controller."
         )
         assert family_hit, (
-            "Expected controller tool family (e.g. job_templates) in filter logs or mock AAP. "
-            f"filtered={names[:20]!r} mock_paths={tool_paths!r}"
+            "Expected controller tool family (e.g. job_templates) in the filtered tool "
+            f"list or mock AAP. filtered={names[:20]!r} mock_paths={tool_paths!r}"
+        )
+        assert not any(hint in joined_names for hint in _LIGHTSPEED_HINTS), (
+            "Lightspeed tool family hints leaked into a controller-only filter result: "
+            f"filtered={names[:20]!r}"
         )
 
     def test_tool_filtering_lightspeed_query(
@@ -267,7 +310,7 @@ class TestMCPSanity:
     ):
         mock_aap = mcp_provider_setup["mock_aap"]
         output_lines = mcp_provider_setup["output_lines"]
-        start = len(output_lines)
+        start = _lines_len(output_lines)
         mock_aap.clear()
         response = _post_query(
             base_url,
@@ -278,14 +321,13 @@ class TestMCPSanity:
             f"Expected 200, got {response.status_code}: {response.text}"
         )
 
-        new_lines = output_lines[start:]
+        new_lines = _lines_from(output_lines, start)
         names = [n.lower() for n in _filtered_tool_names(new_lines)]
-        logs = _joined_logs(new_lines).lower()
+        joined_names = " ".join(names)
         tool_paths = [entry["path"].lower() for entry in mock_aap.tool_requests()]
 
         family_hit = (
-            any(hint in " ".join(names) for hint in _LIGHTSPEED_HINTS)
-            or any(hint in logs for hint in _LIGHTSPEED_HINTS)
+            any(hint in joined_names for hint in _LIGHTSPEED_HINTS)
             or any(
                 path.startswith("/api/v1/") or path.startswith("/check")
                 for path in tool_paths
@@ -296,8 +338,12 @@ class TestMCPSanity:
             "Check the Ansible Lightspeed health status and chatbot health.",
         )
         assert family_hit, (
-            "Expected lightspeed tool family (e.g. health_status) in filter logs or mock AAP. "
-            f"filtered={names[:20]!r} mock_paths={tool_paths!r}"
+            "Expected lightspeed tool family (e.g. health_status) in the filtered tool "
+            f"list or mock AAP. filtered={names[:20]!r} mock_paths={tool_paths!r}"
+        )
+        assert not any(hint in joined_names for hint in _CONTROLLER_HINTS), (
+            "Controller tool family hints leaked into a lightspeed-only filter result: "
+            f"filtered={names[:20]!r}"
         )
 
     def test_knowledge_search_always_included(
@@ -305,7 +351,7 @@ class TestMCPSanity:
     ):
         """RAG still answers product questions when MCP tools are attached."""
         output_lines = mcp_provider_setup["output_lines"]
-        start = len(output_lines)
+        start = _lines_len(output_lines)
         response = _post_query(base_url, mcp_provider_setup, "What is AAP?")
         assert response.status_code == 200, (
             f"Expected 200, got {response.status_code}: {response.text}"
@@ -322,12 +368,16 @@ class TestMCPSanity:
             for kw in ["ansible automation platform", "aap", "ansible", "automation"]
         ), f"Response should mention Ansible or AAP. Got: {response_text[:200]}"
 
-        mcp_filter_debug(output_lines[start:], "What is AAP?")
-        names = [n.lower() for n in _filtered_tool_names(output_lines[start:])]
-        if names:
-            assert any("knowledge_search" in n for n in names), (
-                f"knowledge_search should be always-included in the filtered tool list: {names[:20]!r}"
-            )
+        new_lines = _lines_from(output_lines, start)
+        mcp_filter_debug(new_lines, "What is AAP?")
+        always_included = {n.lower() for n in _always_included_tools(new_lines)}
+        assert always_included, (
+            "Could not find the 'Always included tools' log line — "
+            "the marker may have changed upstream."
+        )
+        assert "knowledge_search" in always_included, (
+            f"knowledge_search should be always-included: {sorted(always_included)!r}"
+        )
 
     def test_tool_call_error_is_handled(self, base_url, mcp_provider_setup):
         """A 404 from mock AAP must not crash the chatbot container."""
@@ -341,6 +391,14 @@ class TestMCPSanity:
         assert response.status_code in (200, 400, 422), (
             f"Expected 200/400/422 after a failing tool call, got {response.status_code}: "
             f"{response.text}"
+        )
+        assert mock_aap.tool_requests(), (
+            "no tool call reached mock AAP — the 404 path was never exercised. "
+            "If the tool was filtered in but never invoked (Granite), check that: "
+            "(1) vLLM was started with --enable-auto-tool-choice and a matching "
+            "--tool-call-parser, and (2) the chatbot is using "
+            "ansible-chatbot-system-prompt-granite-compat.txt. See README's MCP "
+            "sanity tests section."
         )
 
         health = requests.get(f"{base_url}/v1/config", timeout=10)

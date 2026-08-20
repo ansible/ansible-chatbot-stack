@@ -93,7 +93,7 @@ storage:
 registered_resources:
   models:
     - metadata:
-        embedding_dimension: 768
+        embedding_dimension: 384
       model_id: sentence-transformers/all-mpnet-base-v2
       provider_id: sentence-transformers
       provider_model_id: ${env.EMBEDDINGS_MODEL:=/.llama/data/embeddings_model}
@@ -103,7 +103,7 @@ registered_resources:
     - metadata: {}
       vector_store_id: ${env.PROVIDER_VECTOR_DB_ID:=}
       embedding_model: sentence-transformers/${env.EMBEDDINGS_MODEL:=/.llama/data/embeddings_model}
-      embedding_dimension: 768
+      embedding_dimension: 384
       provider_id: aap_faiss
   datasets: []
   scoring_fns: []

@@ -100,12 +100,27 @@ jobs:
       - name: Verify container image
         run: podman images ${{ steps.build-image.outputs.image-with-tag }}
 
+      - name: Login to Quay for MCP images
+        # Best-effort: MCP images live under quay.io/ansible/*. If these credentials
+        # don't have read access there, the pull below fails and the MCP suite fails
+        # loudly at test time (see _skip_or_fail_unpullable) instead of silently skipping.
+        continue-on-error: true
+        run: echo "$QUAY_TOKEN" | podman login quay.io --username "$QUAY_USER" --password-stdin
+        env:
+          QUAY_USER: ${{ secrets.QUAY_USER }}
+          QUAY_TOKEN: ${{ secrets.QUAY_TOKEN }}
+
       - name: Pull MCP server images
+        id: mcp-pull
         run: |
+          controller_status="✅"
+          lightspeed_status="✅"
           podman pull "$MCP_CONTROLLER_IMAGE" \
-            || echo "::warning::Could not pull controller MCP image — MCP tests will skip"
+            || { echo "::warning::Could not pull controller MCP image — MCP suite will fail"; controller_status="❌ pull failed"; }
           podman pull "$MCP_LIGHTSPEED_IMAGE" \
-            || echo "::warning::Could not pull lightspeed MCP image — MCP tests will skip"
+            || { echo "::warning::Could not pull lightspeed MCP image — MCP suite will fail"; lightspeed_status="❌ pull failed"; }
+          echo "controller_status=$controller_status" >> "$GITHUB_OUTPUT"
+          echo "lightspeed_status=$lightspeed_status" >> "$GITHUB_OUTPUT"
 
       - name: Run sanity tests
         run: uv run --frozen --group test pytest tests/sanity/ -v -s --tb=long
@@ -134,6 +149,12 @@ jobs:
           echo "| Granite (vLLM) | ${{ secrets.SANITY_VLLM_URL != '' && '✅' || '⚠️ skipped' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| OpenAI | ${{ secrets.SANITY_OPENAI_API_KEY != '' && '✅' || '⚠️ skipped' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Azure OpenAI | ${{ secrets.SANITY_AZURE_OPENAI_BASE_URL != '' && '✅' || '⚠️ skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### MCP images" >> $GITHUB_STEP_SUMMARY
+          echo "| Image | Pull status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Controller | ${{ steps.mcp-pull.outputs.controller_status }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Lightspeed | ${{ steps.mcp-pull.outputs.lightspeed_status }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           if [ "${{ job.status }}" == "success" ]; then
             echo "✅ All sanity tests passed!" >> $GITHUB_STEP_SUMMARY

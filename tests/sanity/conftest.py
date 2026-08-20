@@ -34,6 +34,9 @@ _LIGHTSPEED_STACK_CONFIG = str(_SANITY_DIR / "lightspeed-stack.yaml")
 _BYOK_LIGHTSPEED_STACK_CONFIG = str(_SANITY_DIR / "byok-lightspeed-stack.yaml")
 _MCP_LIGHTSPEED_STACK_CONFIG = str(_SANITY_DIR / "mcp-lightspeed-stack.yaml")
 
+_GRANITE_SYSTEM_PROMPT_FILE = "ansible-chatbot-system-prompt-granite-compat.txt"
+_DEFAULT_SYSTEM_PROMPT_FILE = "ansible-chatbot-system-prompt.txt"
+
 _ALLOWED_RUNTIMES = ("podman", "docker")
 _IMAGE_REF_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._\-/:]{0,253}$")
 _DEFAULT_MCP_CONTROLLER_IMAGE = "quay.io/ansible/ansible-mcp-controller:latest"
@@ -170,6 +173,16 @@ def _validate_image_ref(image):
     return image
 
 
+def _system_prompt_file_for(provider):
+    """
+    Granite models require the '<|tool_call|>[...]' literal-token format documented
+    in ansible-chatbot-system-prompt-granite-compat.txt (see README's System Prompt
+    table) for a self-hosted vLLM tool-call-parser to recognize tool calls at all.
+    `provider` may be a composite label like 'byok-granite' or 'mcp-granite'.
+    """
+    return _GRANITE_SYSTEM_PROMPT_FILE if provider.endswith("granite") else _DEFAULT_SYSTEM_PROMPT_FILE
+
+
 def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides, provider, expected_model, byok_vector_db_path=None):  # noqa: cognitive-complexity
     """
     Start the chatbot container for a given provider config.
@@ -200,6 +213,9 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides,
         return None, None, None, None
 
     # Check prerequisites
+    system_prompt_file = _system_prompt_file_for(provider)
+    if not Path(f"./{system_prompt_file}").exists():
+        pytest.fail(f"{system_prompt_file} not found in repo root")
     if not Path("./embeddings_model").exists():
         pytest.fail("embeddings_model directory not found — run 'make setup-test' first")
     if not Path("./vector_db/aap_faiss_store.db").exists():
@@ -262,7 +278,7 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides,
         "-v", f"{Path.cwd()}/vector_db/aap_faiss_store.db:/.llama/data/distributions/ansible-chatbot/aap_faiss_store.db{selinux_flag}",
         "-v", f"{lightspeed_config_path}:/.llama/distributions/ansible-chatbot/config/lightspeed-stack.yaml{selinux_flag}",
         "-v", f"{run_config_path}:/.llama/distributions/llama-stack/config/ansible-chatbot-run.yaml{selinux_flag}",
-        "-v", f"{Path.cwd()}/ansible-chatbot-system-prompt.txt:/.llama/distributions/ansible-chatbot/system-prompts/default.txt{selinux_flag}",
+        "-v", f"{Path.cwd()}/{system_prompt_file}:/.llama/distributions/ansible-chatbot/system-prompts/default.txt{selinux_flag}",
         "-v", f"{Path.cwd()}/llama-stack/providers.d:/.llama/providers.d{selinux_flag}",
         "--env", f"PROVIDER_VECTOR_DB_ID={provider_vector_db_id}",
         "--env", "PYTHONUNBUFFERED=1",
@@ -271,12 +287,12 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides,
     ]
 
     if byok_vector_db_path:
-        byok_vid_file = Path(byok_vector_db_path) / "provider_vector_db_id.ind"
+        byok_vid_file = _SANITY_DIR.parent.parent / byok_vector_db_path / "provider_vector_db_id.ind"
         byok_vector_db_id = os.environ.get("BYOK_PROVIDER_VECTOR_DB_ID", "")
         if byok_vid_file.exists() and not byok_vector_db_id:
             try:
                 byok_vector_db_id = byok_vid_file.read_text().strip()
-            except Exception:
+            except OSError:
                 pass
         cmd += [
             "-v", f"{_SANITY_DIR.parent.parent / byok_vector_db_path}:/.llama/data/byok/distributions/ansible-chatbot{selinux_flag}",
@@ -416,8 +432,32 @@ def _mcp_images():
     return _validate_image_ref(controller), _validate_image_ref(lightspeed)
 
 
+def _mcp_image_explicitly_configured():
+    """True when the caller pinned an MCP image via env rather than relying on the default."""
+    return bool(
+        os.environ.get("MCP_IMAGE", "").strip()
+        or os.environ.get("MCP_CONTROLLER_IMAGE", "").strip()
+        or os.environ.get("MCP_LIGHTSPEED_IMAGE", "").strip()
+    )
+
+
+def _skip_or_fail_unpullable(message):
+    """
+    Skip locally, but fail loud in CI.
+
+    A silent skip is fine on a laptop without registry access. In CI, GitHub Actions
+    sets CI=true, and the workflow always pins MCP_CONTROLLER_IMAGE/MCP_LIGHTSPEED_IMAGE
+    — an unpullable image there means the whole MCP suite has never executed, which
+    must fail the build rather than report a deceptively green run.
+    """
+    in_ci = os.environ.get("CI", "").strip().lower() in _TRUTHY
+    if in_ci and _mcp_image_explicitly_configured():
+        pytest.fail(message)
+    pytest.skip(message)
+
+
 def _ensure_image(container_runtime, image):
-    """Pull image if missing; skip the MCP suite when the registry is unavailable."""
+    """Pull image if missing; skip locally (fail in CI) when the registry is unavailable."""
     inspect = subprocess.run(
         [container_runtime, "image", "inspect", image],
         capture_output=True,
@@ -434,19 +474,26 @@ def _ensure_image(container_runtime, image):
             timeout=180,
         )
     except subprocess.TimeoutExpired:
-        pytest.skip(f"Timed out pulling MCP image {image}")
+        _skip_or_fail_unpullable(f"Timed out pulling MCP image {image}")
+        return
     if pull.returncode != 0:
         detail = (pull.stderr or pull.stdout or "").strip()[-400:]
-        pytest.skip(f"Could not pull MCP image {image}: {detail}")
+        _skip_or_fail_unpullable(f"Could not pull MCP image {image}: {detail}")
+        return
     print(f"[✓] Pulled MCP image {image}")
 
 
-def _assert_port_free(port, label):
-    if port_is_in_use(port):
-        pytest.fail(
-            f"{label} port {port} is already in use. "
-            "Stop the existing process/container before MCP sanity tests."
-        )
+def _assert_port_free(port, label, wait=10):
+    """Fail unless the port is free, allowing a brief window for the previous
+    provider's container teardown (podman rm -f) to actually release it."""
+    deadline = time.monotonic() + wait
+    while port_is_in_use(port):
+        if time.monotonic() >= deadline:
+            pytest.fail(
+                f"{label} port {port} is already in use. "
+                "Stop the existing process/container before MCP sanity tests."
+            )
+        time.sleep(0.5)
 
 
 def _wait_for_tcp(port, timeout=60, label="service"):
@@ -609,10 +656,9 @@ def _stop_mcp_servers(handles):
 def _start_mock_aap_for_sanity():
     requested = os.environ.get("MCP_AAP_MOCK_PORT", "").strip()
     if requested:
-        try:
-            port = int(requested)
-        except ValueError:
-            pytest.fail(f"MCP_AAP_MOCK_PORT must be an integer, got: {requested!r}")
+        if not requested.isdigit():
+            pytest.fail(f"MCP_AAP_MOCK_PORT must be a positive integer, got: {requested!r}")
+        port = int(requested)
         if port_is_in_use(port):
             pytest.fail(f"Mock AAP port {port} is already in use")
         mock = start_mock_aap(port)

@@ -18,7 +18,7 @@ byok_rag:
   - rag_id: byok-docs
     rag_type: inline::faiss
     embedding_model: sentence-transformers/${env.EMBEDDINGS_MODEL:=/.llama/data/embeddings_model}
-    embedding_dimension: 768
+    embedding_dimension: 384
     vector_db_id: ${env.BYOK_PROVIDER_VECTOR_DB_ID:=}
     db_path: /.llama/data/byok/distributions/ansible-chatbot/faiss_store.db
     score_multiplier: 1.2
