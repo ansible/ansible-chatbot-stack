@@ -11,6 +11,7 @@ This allows tests to run without needing access to private container registries.
 
 import asyncio
 import os
+import shutil
 import sys
 from pathlib import Path
 
