@@ -1,6 +1,6 @@
 version: '2'
-image_name: ansible-chatbot-sanity-azure
-container_image: ansible-chatbot-sanity-azure
+image_name: ansible-chatbot-sanity-mcp-openai
+container_image: ansible-chatbot-sanity-mcp-openai
 apis:
 - inference
 - vector_io
@@ -11,12 +11,11 @@ apis:
 - files
 providers:
   inference:
-  - provider_id: openai_azure
-    provider_type: remote::azure
+  - provider_id: openai
+    provider_type: remote::openai
     config:
-      base_url: ${env.AZURE_OPENAI_BASE_URL}/openai/v1
-      api_key: ${env.AZURE_OPENAI_API_KEY}
-      api_type: null
+      api_key: ${env.OPENAI_API_KEY}
+      base_url: ${env.OPENAI_BASE_URL:=https://api.openai.com/v1}
   - provider_id: sentence-transformers
     provider_type: inline::sentence-transformers
     config: {}
@@ -44,7 +43,10 @@ providers:
           table_name: agent_responses
           backend: sql_default
       tools_filter:
-        enabled: false
+        enabled: true
+        model_id: ${env.INFERENCE_MODEL_FILTER:=}
+        always_include_tools:
+        - knowledge_search
   datasetio:
   - provider_id: localfs
     provider_type: inline::localfs
@@ -63,6 +65,9 @@ providers:
   tool_runtime:
   - provider_id: rag-runtime
     provider_type: inline::rag-runtime
+    config: {}
+  - provider_id: model-context-protocol
+    provider_type: remote::model-context-protocol
     config: {}
 storage:
   backends:
@@ -111,6 +116,14 @@ registered_resources:
   tool_groups:
     - toolgroup_id: builtin::rag
       provider_id: rag-runtime
+    - toolgroup_id: mcp::aap-controller
+      provider_id: model-context-protocol
+      mcp_endpoint:
+        uri: http://localhost:8004/sse
+    - toolgroup_id: mcp::aap-lightspeed
+      provider_id: model-context-protocol
+      mcp_endpoint:
+        uri: http://localhost:8005/sse
   safety:
     - default_shield_id: llama-guard
 vector_stores:

@@ -180,9 +180,13 @@ responses_store.db
 trace_store.db
 /embeddings_model
 /vector_db
+/byok_vector_db
 /llama-stack
 /work
 /local_db
+
+# sanity test fixtures, isolated from the dev copies above
+/.test_data/
 
 # ignor building files
 requirements.txt

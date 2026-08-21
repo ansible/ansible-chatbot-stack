@@ -1,6 +1,6 @@
 version: '2'
-image_name: ansible-chatbot-sanity-azure
-container_image: ansible-chatbot-sanity-azure
+image_name: ansible-chatbot-sanity-mcp-azure
+container_image: ansible-chatbot-sanity-mcp-azure
 apis:
 - inference
 - vector_io
@@ -44,7 +44,10 @@ providers:
           table_name: agent_responses
           backend: sql_default
       tools_filter:
-        enabled: false
+        enabled: true
+        model_id: ${env.INFERENCE_MODEL_FILTER:=}
+        always_include_tools:
+        - knowledge_search
   datasetio:
   - provider_id: localfs
     provider_type: inline::localfs
@@ -63,6 +66,9 @@ providers:
   tool_runtime:
   - provider_id: rag-runtime
     provider_type: inline::rag-runtime
+    config: {}
+  - provider_id: model-context-protocol
+    provider_type: remote::model-context-protocol
     config: {}
 storage:
   backends:
@@ -111,6 +117,14 @@ registered_resources:
   tool_groups:
     - toolgroup_id: builtin::rag
       provider_id: rag-runtime
+    - toolgroup_id: mcp::aap-controller
+      provider_id: model-context-protocol
+      mcp_endpoint:
+        uri: http://localhost:8004/sse
+    - toolgroup_id: mcp::aap-lightspeed
+      provider_id: model-context-protocol
+      mcp_endpoint:
+        uri: http://localhost:8005/sse
   safety:
     - default_shield_id: llama-guard
 vector_stores:

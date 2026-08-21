@@ -32,7 +32,7 @@ endif
 
 
 
-.PHONY: help setup setup-test build build-custom run clean all deploy-k8s shell tag-and-push test update-lock
+.PHONY: help setup setup-test setup-sanity-test-data build build-custom run clean all deploy-k8s shell tag-and-push test update-lock test-sanity-byok test-sanity-mcp
 
 .EXPORT_ALL_VARIABLES:
 
@@ -47,6 +47,7 @@ help:
 	@echo "  all               - Run all steps (setup, build, build-custom)"
 	@echo "  setup             - Sets up llama-stack and the external lightspeed providers"
 	@echo "  setup-test        - Sets up test environment with dummy data (no Quay credentials needed)"
+	@echo "  setup-sanity-test-data - Sets up dummy data for sanity tests, isolated under .test_data/"
 	@echo "  setup-vector-db   - Sets up vector DB and embedding model"
 	@echo "  build             - Build the customized Ansible Chatbot Stack image from lightspeed-core/lightspeed-stack"
 	@echo "  run               - Run the Ansible Chatbot Stack container built with 'build-lsc'"
@@ -64,6 +65,9 @@ help:
 	@echo "  test-sanity-granite - Run Granite/vLLM sanity tests"
 	@echo "  test-sanity-openai  - Run real OpenAI sanity tests"
 	@echo "  test-sanity-azure   - Run Azure OpenAI sanity tests"
+	@echo "  test-sanity-byok    - Run BYOK sanity tests (requires inference provider env vars)"
+	@echo "  test-sanity-mcp     - Run MCP sanity tests (requires inference provider env vars + MCP images)"
+	@echo "                        Set MCP_DEBUG=1 to print tool-filter before/after counts"
 	@echo ""
 	@echo "Required Environment variables:"
 	@echo "  ANSIBLE_CHATBOT_VERSION                - Version tag for the image (default: $(ANSIBLE_CHATBOT_VERSION))"
@@ -88,6 +92,12 @@ setup-test: llama-stack/providers.d/inline/agents/lightspeed_inline_agent.yaml
 	uv sync --group test
 	uv run python tests/setup_test_data.py
 	@echo "Test environment setup complete."
+
+setup-sanity-test-data: llama-stack/providers.d/inline/agents/lightspeed_inline_agent.yaml
+	@echo "Setting up sanity test data (dummy data, isolated under .test_data/)..."
+	uv sync --group test
+	TEST_DATA_ROOT=.test_data uv run python tests/setup_test_data.py
+	@echo "Sanity test data setup complete."
 
 setup-vector-db: vector_db/aap_faiss_store.db
 vector_db/aap_faiss_store.db:
@@ -298,8 +308,16 @@ test-sanity-granite:
 
 test-sanity-openai:
 	@echo "Running OpenAI sanity tests (requires OPENAI_API_KEY, OPENAI_INFERENCE_MODEL)..."
-	uv run --frozen --group test pytest tests/sanity/ -v -m openai_live
+	uv run --frozen --group test pytest tests/sanity/ -v -m openai
 
 test-sanity-azure:
 	@echo "Running Azure OpenAI sanity tests (requires AZURE_OPENAI_BASE_URL, AZURE_OPENAI_API_KEY, AZURE_OPENAI_INFERENCE_MODEL)..."
 	uv run --frozen --group test pytest tests/sanity/ -v -m azure
+
+test-sanity-byok:
+	@echo "Running BYOK sanity tests (requires inference provider env vars + .test_data/byok_vector_db/)..."
+	uv run --frozen --group test pytest tests/sanity/ -v -m byok
+
+test-sanity-mcp:
+	@echo "Running MCP sanity tests (requires inference provider env vars + MCP images)..."
+	uv run --frozen --group test pytest tests/sanity/ -v -m mcp $(if $(filter 1 true yes,$(MCP_DEBUG)),--mcp-debug -s,)
