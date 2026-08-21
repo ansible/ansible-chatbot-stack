@@ -321,8 +321,8 @@ class TestMCPSanity:
         """
         Restored after review flagged its removal as a coverage gap (nothing else
         asserts the lightspeed tool family is ever filtered in). Noted as flaky
-        during local testing, so this may need more work (e.g. a clearer prompt
-        or a retry) if it proves flaky in CI too.
+        during local testing, so it uses the same CI/local split as
+        test_tool_call_error_is_handled instead of a hard assert.
         """
         mock_aap = mcp_provider_setup["mock_aap"]
         output_lines = mcp_provider_setup["output_lines"]
@@ -353,10 +353,18 @@ class TestMCPSanity:
             new_lines,
             "Check the Ansible Lightspeed health status and chatbot health.",
         )
-        assert family_hit, (
+        message = (
             "Expected lightspeed tool family (e.g. health_status) in the filtered tool "
             f"list or mock AAP. filtered={names[:20]!r} mock_paths={tool_paths!r}"
         )
+        # Noted as flaky locally (model non-determinism in which tools get filtered
+        # in). Matches test_tool_call_error_is_handled's CI/local split above: fail
+        # loud in CI so a genuine regression can't pass green indefinitely, warn
+        # locally where an occasional non-deterministic miss is expected.
+        if not family_hit:
+            if os.environ.get("CI", "").strip().lower() in _TRUTHY:
+                pytest.fail(message)
+            warnings.warn(message)
         # See test_tool_filtering_controller_query's matching comment: the filter
         # model's exclusion of the other family is not deterministic across providers.
         if any(hint in joined_names for hint in _CONTROLLER_HINTS):
