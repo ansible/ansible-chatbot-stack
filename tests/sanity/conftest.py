@@ -28,6 +28,9 @@ BASE_URL = "http://127.0.0.1:8322"
 _GRANITE_REQUIRED = ["VLLM_URL", "VLLM_API_TOKEN", "INFERENCE_MODEL"]
 _OPENAI_REQUIRED = ["OPENAI_API_KEY", "OPENAI_INFERENCE_MODEL"]
 _AZURE_REQUIRED = ["AZURE_OPENAI_BASE_URL", "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_INFERENCE_MODEL"]
+_VERTEXAI_REQUIRED = ["VERTEX_AI_CREDENTIALS", "VERTEX_AI_PROJECT"]
+_VERTEXAI_DEFAULT_MODEL = "google/gemini-2.5-pro"
+_GOOGLE_ADC_CONTAINER_PATH = "/.llama/secrets/google-application-credentials.json"
 
 _SANITY_DIR = Path(__file__).parent
 _PROJECT_ROOT = _SANITY_DIR.parent.parent
@@ -110,6 +113,56 @@ def _check_required_vars(var_names):
         pytest.skip(f"Missing required environment variables: {', '.join(missing)}")
 
 
+def _unlink_quietly(path):
+    if not path:
+        return
+    try:
+        os.unlink(path)
+    except OSError:
+        pass
+
+
+def _write_vertex_adc_file():
+    """Write VERTEX_AI_CREDENTIALS to a 0600 temp file and export its path as ADC.
+
+    The caller must invoke _cleanup_vertex_adc_file on the returned path.
+    """
+    creds_file = tempfile.NamedTemporaryFile(
+        "w", suffix=".json", prefix="vertex-adc-", delete=False
+    )
+    try:
+        creds_file.write(os.environ["VERTEX_AI_CREDENTIALS"])
+    finally:
+        creds_file.close()
+    os.chmod(creds_file.name, 0o600)
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = creds_file.name
+    return creds_file.name
+
+
+def _cleanup_vertex_adc_file(path):
+    """Delete the ADC temp file and drop GOOGLE_APPLICATION_CREDENTIALS if it points at it."""
+    if path and os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") == path:
+        del os.environ["GOOGLE_APPLICATION_CREDENTIALS"]
+    _unlink_quietly(path)
+
+
+def _google_adc_volume_mount(env_overrides):
+    """Point GOOGLE_APPLICATION_CREDENTIALS at a container path and return a volume spec.
+
+    Vertex AI uses Application Default Credentials from this file. The host path
+    is rewritten in env_overrides so the container sees the mounted location.
+    Returns None when the env var is not present.
+    """
+    host_path = env_overrides.get("GOOGLE_APPLICATION_CREDENTIALS")
+    if not host_path:
+        return None
+    creds = Path(host_path).expanduser()
+    if not creds.is_file():
+        pytest.fail(f"GOOGLE_APPLICATION_CREDENTIALS is not a file: {host_path}")
+    env_overrides["GOOGLE_APPLICATION_CREDENTIALS"] = _GOOGLE_ADC_CONTAINER_PATH
+    return f"{creds.resolve()}:{_GOOGLE_ADC_CONTAINER_PATH}:ro,z"
+
+
 def _build_provider_config(provider):
     """Return (run_config_path, env_overrides, config_dict) for the given provider."""
     if provider == "granite":
@@ -137,7 +190,7 @@ def _build_provider_config(provider):
         run_config = str(_SANITY_DIR / "openai-chatbot-run.yaml")
         config = {"model": os.environ["OPENAI_INFERENCE_MODEL"], "provider": "openai"}
 
-    else:  # azure
+    elif provider == "azure":
         _check_required_vars(_AZURE_REQUIRED)
         env_overrides = {
             "AZURE_OPENAI_BASE_URL": os.environ["AZURE_OPENAI_BASE_URL"],
@@ -146,6 +199,27 @@ def _build_provider_config(provider):
         }
         run_config = str(_SANITY_DIR / "azure-chatbot-run.yaml")
         config = {"model": os.environ["AZURE_OPENAI_INFERENCE_MODEL"], "provider": "openai_azure"}
+
+    elif provider == "vertexai":
+        _check_required_vars(_VERTEXAI_REQUIRED)
+        creds_path = _write_vertex_adc_file()
+        model = os.environ.get("VERTEX_AI_INFERENCE_MODEL") or _VERTEXAI_DEFAULT_MODEL
+        env_overrides = {
+            "GOOGLE_APPLICATION_CREDENTIALS": creds_path,
+            "VERTEX_AI_PROJECT": os.environ["VERTEX_AI_PROJECT"],
+            "VERTEX_AI_INFERENCE_MODEL": model,
+        }
+        if os.environ.get("VERTEX_AI_LOCATION"):
+            env_overrides["VERTEX_AI_LOCATION"] = os.environ["VERTEX_AI_LOCATION"]
+        run_config = str(_SANITY_DIR / "vertexai-chatbot-run.yaml")
+        config = {
+            "model": model,
+            "provider": "vertexai",
+            "credentials_file": creds_path,
+        }
+
+    else:
+        pytest.fail(f"Unknown sanity provider: {provider}")
 
     return run_config, env_overrides, config
 
@@ -179,6 +253,42 @@ def _validate_image_ref(image):
     if not _IMAGE_REF_RE.fullmatch(image) or ".." in image:
         pytest.fail(f"Invalid container image reference: {image!r}")
     return image
+
+
+def _model_ids_from_payload(payload):
+    """Extract model identifier strings from a /v1/models JSON payload."""
+    if isinstance(payload, dict):
+        items = payload.get("data") or payload.get("models") or []
+    elif isinstance(payload, list):
+        items = payload
+    else:
+        return []
+    ids = []
+    for item in items:
+        if isinstance(item, str):
+            ids.append(item)
+        elif isinstance(item, dict):
+            model_id = item.get("id") or item.get("model_id") or item.get("identifier")
+            if model_id:
+                ids.append(str(model_id))
+    return ids
+
+
+def _print_available_models(models_payload=None):
+    """Print model IDs from /v1/models so they show up next to the server-ready log."""
+    payload = models_payload
+    if payload is None:
+        try:
+            resp = requests.get(f"{BASE_URL}/v1/models", timeout=2)
+            if resp.status_code != 200:
+                return
+            payload = resp.json()
+        except (requests.exceptions.RequestException, ValueError):
+            return
+    model_ids = _model_ids_from_payload(payload)
+    if model_ids:
+        print("[✓] Models: " + ", ".join(model_ids))
+
 
 
 def _system_prompt_file_for(provider):
@@ -218,6 +328,10 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides,
                 f"not found in /v1/models. Stop the existing server first."
             )
         print(f"\n[✓] Chatbot server already running at {BASE_URL}")
+        try:
+            _print_available_models(models_resp.json())
+        except ValueError:
+            pass
         return None, None, None, None
 
     # Check prerequisites
@@ -274,6 +388,8 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides,
             pass
 
     # Write provider credentials to a 0600 temp file to keep secrets off argv
+    env_overrides = dict(env_overrides)
+    adc_mount = _google_adc_volume_mount(env_overrides)
     env_file = tempfile.NamedTemporaryFile("w", suffix=".env", delete=False)
     env_file_path = env_file.name
     try:
@@ -312,6 +428,10 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides,
         "--env", f"LOG_LEVEL={os.environ.get('LOG_LEVEL', 'INFO')}",
         "--env-file", env_file_path,
     ]
+    if os.environ.get("LLAMA_STACK_LOGGING"):
+        cmd += ["--env", f"LLAMA_STACK_LOGGING={os.environ['LLAMA_STACK_LOGGING']}"]
+    if adc_mount:
+        cmd += ["-v", adc_mount]
 
     if byok_vector_db_path:
         byok_vid_file = _TEST_DATA_DIR / byok_vector_db_path / _PROVIDER_VECTOR_DB_ID_FILE
@@ -385,6 +505,7 @@ def _start_sanity_server(run_config_path, lightspeed_config_path, env_overrides,
             if resp.status_code == 200:
                 elapsed = int(time.monotonic() - start)
                 print(f"[✓] Server ready ({elapsed}s)")
+                _print_available_models()
                 return process, container_runtime, container_name, env_file_path
         except requests.exceptions.RequestException:
             pass
@@ -769,6 +890,7 @@ def _reject_stale_server(context_message):
         pytest.param("granite", marks=pytest.mark.granite),
         pytest.param("openai", marks=pytest.mark.openai),
         pytest.param("azure", marks=pytest.mark.azure),
+        pytest.param("vertexai", marks=pytest.mark.vertexai),
     ],
     scope="module",
 )
@@ -781,18 +903,17 @@ def provider_setup(request):
     """
     provider = request.param
     run_config, env_overrides, config = _build_provider_config(provider)
-    process, runtime, name, env_file_path = _start_sanity_server(
-        run_config, _LIGHTSPEED_STACK_CONFIG, env_overrides, provider, config["model"]
-    )
+    credentials_file = config.pop("credentials_file", None)
+    process = runtime = name = env_file_path = None
     try:
+        process, runtime, name, env_file_path = _start_sanity_server(
+            run_config, _LIGHTSPEED_STACK_CONFIG, env_overrides, provider, config["model"]
+        )
         yield config
     finally:
         _stop_sanity_server(process, runtime, name)
-        if env_file_path:
-            try:
-                os.unlink(env_file_path)
-            except OSError:
-                pass
+        _unlink_quietly(env_file_path)
+        _cleanup_vertex_adc_file(credentials_file)
 
 
 @pytest.fixture(
@@ -800,6 +921,7 @@ def provider_setup(request):
         pytest.param("granite", marks=[pytest.mark.granite, pytest.mark.byok]),
         pytest.param("openai", marks=[pytest.mark.openai, pytest.mark.byok]),
         pytest.param("azure", marks=[pytest.mark.azure, pytest.mark.byok]),
+        pytest.param("vertexai", marks=[pytest.mark.vertexai, pytest.mark.byok]),
     ],
     scope="module",
 )
@@ -817,26 +939,24 @@ def byok_provider_setup(request):
     # check below: it's what lets a param with missing credentials skip cleanly
     # rather than hit the hard pytest.fail() below for an unrelated reason.
     run_config, env_overrides, config = _build_provider_config(provider)
-
-    _reject_stale_server(
-        "_start_sanity_server's reuse check only verifies the model name, not that "
-        "BYOK config is mounted — stop the existing server before BYOK sanity tests."
-    )
-
-    process, runtime, name, env_file_path = _start_sanity_server(
-        run_config, _BYOK_LIGHTSPEED_STACK_CONFIG, env_overrides,
-        provider=f"byok-{provider}", expected_model=config["model"],
-        byok_vector_db_path="byok_vector_db",
-    )
+    credentials_file = config.pop("credentials_file", None)
+    process = runtime = name = env_file_path = None
     try:
+        _reject_stale_server(
+            "_start_sanity_server's reuse check only verifies the model name, not that "
+            "BYOK config is mounted — stop the existing server before BYOK sanity tests."
+        )
+
+        process, runtime, name, env_file_path = _start_sanity_server(
+            run_config, _BYOK_LIGHTSPEED_STACK_CONFIG, env_overrides,
+            provider=f"byok-{provider}", expected_model=config["model"],
+            byok_vector_db_path="byok_vector_db",
+        )
         yield config
     finally:
         _stop_sanity_server(process, runtime, name)
-        if env_file_path:
-            try:
-                os.unlink(env_file_path)
-            except OSError:
-                pass
+        _unlink_quietly(env_file_path)
+        _cleanup_vertex_adc_file(credentials_file)
 
 
 @pytest.fixture(
@@ -844,6 +964,7 @@ def byok_provider_setup(request):
         pytest.param("granite", marks=[pytest.mark.granite, pytest.mark.mcp]),
         pytest.param("openai", marks=[pytest.mark.openai, pytest.mark.mcp]),
         pytest.param("azure", marks=[pytest.mark.azure, pytest.mark.mcp]),
+        pytest.param("vertexai", marks=[pytest.mark.vertexai, pytest.mark.mcp]),
     ],
     scope="module",
 )
@@ -859,13 +980,14 @@ def mcp_provider_setup(request):
     # check below: it's what lets a param with missing credentials skip cleanly
     # rather than hit the hard pytest.fail() below for an unrelated reason.
     run_config, env_overrides, config = _build_mcp_provider_config(provider)
-
-    _reject_stale_server("Stop it before MCP sanity tests so MCP sidecars can be attached.")
-
-    mock_aap = _start_mock_aap_for_sanity()
+    credentials_file = config.pop("credentials_file", None)
+    mock_aap = None
     mcp_handles = []
     process = runtime = name = env_file_path = None
     try:
+        _reject_stale_server("Stop it before MCP sanity tests so MCP sidecars can be attached.")
+
+        mock_aap = _start_mock_aap_for_sanity()
         mcp_handles = _start_mcp_servers(mock_aap.url)
         process, runtime, name, env_file_path = _start_sanity_server(
             run_config, _MCP_LIGHTSPEED_STACK_CONFIG, env_overrides,
@@ -876,13 +998,11 @@ def mcp_provider_setup(request):
         yield config
     finally:
         _stop_sanity_server(process, runtime, name)
-        if env_file_path:
-            try:
-                os.unlink(env_file_path)
-            except OSError:
-                pass
+        _unlink_quietly(env_file_path)
+        _cleanup_vertex_adc_file(credentials_file)
         _stop_mcp_servers(mcp_handles)
-        mock_aap.stop()
+        if mock_aap is not None:
+            mock_aap.stop()
 
 
 @pytest.fixture(scope="session")

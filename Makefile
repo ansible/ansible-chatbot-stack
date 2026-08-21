@@ -65,6 +65,7 @@ help:
 	@echo "  test-sanity-granite - Run Granite/vLLM sanity tests"
 	@echo "  test-sanity-openai  - Run real OpenAI sanity tests"
 	@echo "  test-sanity-azure   - Run Azure OpenAI sanity tests"
+	@echo "  test-sanity-vertexai - Run Google Vertex AI sanity tests"
 	@echo "  test-sanity-byok    - Run BYOK sanity tests (requires inference provider env vars)"
 	@echo "  test-sanity-mcp     - Run MCP sanity tests (requires inference provider env vars + MCP images)"
 	@echo "                        Set MCP_DEBUG=1 to print tool-filter before/after counts"
@@ -313,6 +314,10 @@ test-sanity-openai:
 test-sanity-azure:
 	@echo "Running Azure OpenAI sanity tests (requires AZURE_OPENAI_BASE_URL, AZURE_OPENAI_API_KEY, AZURE_OPENAI_INFERENCE_MODEL)..."
 	uv run --frozen --group test pytest tests/sanity/ -v -m azure
+
+test-sanity-vertexai:
+	@echo "Running Vertex AI sanity tests (requires VERTEX_AI_CREDENTIALS, VERTEX_AI_PROJECT)..."
+	uv run --frozen --group test pytest tests/sanity/ -v -m vertexai
 
 test-sanity-byok:
 	@echo "Running BYOK sanity tests (requires inference provider env vars + .test_data/byok_vector_db/)..."
