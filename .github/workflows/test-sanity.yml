@@ -33,6 +33,13 @@ jobs:
       AZURE_OPENAI_BASE_URL: ${{ secrets.SANITY_AZURE_OPENAI_BASE_URL }}
       AZURE_OPENAI_API_KEY: ${{ secrets.SANITY_AZURE_OPENAI_API_KEY }}
       AZURE_OPENAI_INFERENCE_MODEL: ${{ secrets.SANITY_AZURE_OPENAI_INFERENCE_MODEL }}
+      # Vertex AI — tests skip if these are empty. VERTEX_AI_CREDENTIALS is the
+      # service-account JSON; the sanity fixtures write it to a temp file and set
+      # GOOGLE_APPLICATION_CREDENTIALS to that path.
+      VERTEX_AI_CREDENTIALS: ${{ secrets.SANITY_VERTEX_AI_CREDENTIALS }}
+      VERTEX_AI_PROJECT: ${{ secrets.SANITY_VERTEX_AI_PROJECT }}
+      VERTEX_AI_LOCATION: ${{ secrets.SANITY_VERTEX_AI_LOCATION }}
+      VERTEX_AI_INFERENCE_MODEL: ${{ secrets.SANITY_VERTEX_AI_INFERENCE_MODEL }}
       # MCP servers — pinning these means _skip_or_fail_unpullable (conftest.py) fails
       # the build rather than skipping if the images cannot be pulled; see the Quay
       # login step below.
@@ -56,7 +63,7 @@ jobs:
 
       - name: Fail if no providers configured
         run: |
-          if [ -z "$VLLM_URL" ] && [ -z "$OPENAI_API_KEY" ] && [ -z "$AZURE_OPENAI_BASE_URL" ]; then
+          if [ -z "$VLLM_URL" ] && [ -z "$OPENAI_API_KEY" ] && [ -z "$AZURE_OPENAI_BASE_URL" ] && [ -z "$VERTEX_AI_CREDENTIALS" ]; then
             echo "::error::No sanity provider credentials configured — nothing will be tested"
             exit 1
           fi
@@ -151,6 +158,7 @@ jobs:
           echo "| Granite (vLLM) | ${{ secrets.SANITY_VLLM_URL != '' && '✅' || '⚠️ skipped' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| OpenAI | ${{ secrets.SANITY_OPENAI_API_KEY != '' && '✅' || '⚠️ skipped' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Azure OpenAI | ${{ secrets.SANITY_AZURE_OPENAI_BASE_URL != '' && '✅' || '⚠️ skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Vertex AI | ${{ secrets.SANITY_VERTEX_AI_PROJECT != '' && '✅' || '⚠️ skipped' }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### MCP images" >> $GITHUB_STEP_SUMMARY
           echo "| Image | Pull status |" >> $GITHUB_STEP_SUMMARY

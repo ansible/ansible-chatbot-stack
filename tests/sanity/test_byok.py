@@ -6,6 +6,7 @@ Tests run for each provider configured via the byok_provider_setup fixture:
   - OpenAI          — requires OPENAI_API_KEY, OPENAI_INFERENCE_MODEL
   - Azure OpenAI    — requires AZURE_OPENAI_BASE_URL, AZURE_OPENAI_API_KEY,
                                AZURE_OPENAI_INFERENCE_MODEL
+  - Vertex AI       — requires VERTEX_AI_CREDENTIALS, VERTEX_AI_PROJECT
 
 A provider is skipped automatically when its required variables are not set.
 The BYOK vector DB must exist at .test_data/byok_vector_db/ (created by 'make setup-sanity-test-data').
