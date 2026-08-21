@@ -200,7 +200,7 @@ requires-dist = [
     { name = "cryptography", specifier = ">=50.0.0,<51" },
     { name = "dumb-init", specifier = ">=1.2.5.post1" },
     { name = "faiss-cpu", specifier = "==1.12" },
-    { name = "joserfc", specifier = ">=1.6.7" },
+    { name = "joserfc", specifier = ">=1.6.8" },
     { name = "lightspeed-stack-providers", specifier = "==0.4.3" },
     { name = "litellm", specifier = "==1.96.2" },
     { name = "mcp", specifier = ">=1.28.1,<2" },
@@ -225,7 +225,7 @@ dev = [
 test = [
     { name = "pytest", specifier = ">=8.0.0" },
     { name = "pytest-asyncio", specifier = ">=0.23.0" },
-    { name = "requests", specifier = ">=2.31.0" },
+    { name = "requests", specifier = ">=2.33.0" },
 ]
 
 [[package]]
