@@ -177,6 +177,8 @@ class TestChatbotSanity:
 
 def test_vertexai_run_config():
     """Vertex AI sanity run configs must declare the provider, ADC project/location, and default model."""
+    from tests.sanity.conftest import _VERTEXAI_DEFAULT_MODEL
+
     sanity_dir = Path(__file__).parent
     for name in ("vertexai-chatbot-run.yaml", "mcp-vertexai-chatbot-run.yaml"):
         text = (sanity_dir / name).read_text()
@@ -184,10 +186,9 @@ def test_vertexai_run_config():
         assert "provider_type: remote::vertexai" in text, name
         assert "project: ${env.VERTEX_AI_PROJECT:=}" in text, name
         assert "location: ${env.VERTEX_AI_LOCATION:=us-central1}" in text, name
-        assert "google/gemini-2.5-pro" in text, name
+        assert _VERTEXAI_DEFAULT_MODEL in text, name
 
 
-@pytest.mark.vertexai
 def test_vertexai_provider_config_skipped_without_credentials(monkeypatch):
     monkeypatch.delenv("VERTEX_AI_CREDENTIALS", raising=False)
     monkeypatch.delenv("GOOGLE_APPLICATION_CREDENTIALS", raising=False)

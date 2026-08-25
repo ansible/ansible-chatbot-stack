@@ -207,6 +207,12 @@ Run a single provider:
     make test-sanity-vertexai
 ```
 
+**Note:** In Llama Stack versions 0.4 through 0.5, the Vertex AI provider hardcodes support to the following three
+models:
+- `google/gemini-2.0-flash`
+- `google/gemini-2.5-flash`
+- `google/gemini-2.5-pro`
+
 ### MCP sanity tests
 
 These start real Automation Controller and Lightspeed MCP servers against a
