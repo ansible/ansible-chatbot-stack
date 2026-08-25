@@ -1,0 +1,152 @@
+version: '2'
+image_name: ansible-chatbot-sanity-mcp-vertexai
+container_image: ansible-chatbot-sanity-mcp-vertexai
+apis:
+- inference
+- vector_io
+- safety
+- agents
+- datasetio
+- tool_runtime
+- files
+providers:
+  inference:
+  - provider_id: vertexai
+    provider_type: remote::vertexai
+    config:
+      project: ${env.VERTEX_AI_PROJECT:=}
+      location: ${env.VERTEX_AI_LOCATION:=us-central1}
+  - provider_id: sentence-transformers
+    provider_type: inline::sentence-transformers
+    config: {}
+  vector_io:
+  - provider_id: aap_faiss
+    provider_type: inline::faiss
+    config:
+      persistence:
+        namespace: vector_io::faiss
+        backend: kv_rag
+  safety:
+  - provider_id: llama-guard
+    provider_type: inline::llama-guard
+    config:
+      excluded_categories: []
+  agents:
+  - provider_id: lightspeed_inline_agent
+    provider_type: inline::lightspeed_inline_agent
+    config:
+      persistence:
+        agent_state:
+          namespace: agents_state
+          backend: kv_default
+        responses:
+          table_name: agent_responses
+          backend: sql_default
+      tools_filter:
+        enabled: true
+        model_id: ${env.INFERENCE_MODEL_FILTER:=}
+        always_include_tools:
+        - knowledge_search
+  datasetio:
+  - provider_id: localfs
+    provider_type: inline::localfs
+    config:
+      kvstore:
+        namespace: localfs_datasetio
+        backend: kv_default
+  files:
+  - provider_id: meta-reference-files
+    provider_type: inline::localfs
+    config:
+      storage_dir: ${env.PROVIDERS_DB_DIR:=./test_data}/files
+      metadata_store:
+        table_name: files_metadata
+        backend: sql_default
+  tool_runtime:
+  - provider_id: rag-runtime
+    provider_type: inline::rag-runtime
+    config: {}
+  - provider_id: model-context-protocol
+    provider_type: remote::model-context-protocol
+    config: {}
+storage:
+  backends:
+    kv_rag:
+      type: kv_sqlite
+      db_path: ${env.VECTOR_DB_DIR:=./test_data}/aap_faiss_store.db
+    kv_default:
+      type: kv_sqlite
+      db_path: ${env.KV_STORE_DB_DIR:=./test_data}/kv_store.db
+    sql_default:
+      type: sql_sqlite
+      db_path: ${env.SQL_STORE_DB_DIR:=./test_data}/sql_store.db
+  stores:
+    metadata:
+      namespace: registry
+      backend: kv_default
+    inference:
+      table_name: inference_store
+      backend: sql_default
+      max_write_queue_size: 10000
+      num_writers: 4
+    conversations:
+      table_name: openai_conversations
+      backend: sql_default
+    prompts:
+      namespace: prompts
+      backend: kv_default
+registered_resources:
+  models:
+    - metadata: {}
+      model_id: ${env.VERTEX_AI_INFERENCE_MODEL:=google/gemini-2.5-pro}
+      provider_id: vertexai
+      provider_model_id: ${env.VERTEX_AI_INFERENCE_MODEL:=google/gemini-2.5-pro}
+    - metadata:
+        embedding_dimension: 384
+      model_id: sentence-transformers/all-mpnet-base-v2
+      provider_id: sentence-transformers
+      provider_model_id: ${env.EMBEDDINGS_MODEL:=/.llama/data/embeddings_model}
+      model_type: embedding
+  shields: []
+  vector_stores:
+    - metadata: {}
+      vector_store_id: ${env.PROVIDER_VECTOR_DB_ID:=}
+      embedding_model: sentence-transformers/${env.EMBEDDINGS_MODEL:=/.llama/data/embeddings_model}
+      embedding_dimension: 384
+      provider_id: aap_faiss
+  datasets: []
+  scoring_fns: []
+  benchmarks: []
+  tool_groups:
+    - toolgroup_id: builtin::rag
+      provider_id: rag-runtime
+    - toolgroup_id: mcp::aap-controller
+      provider_id: model-context-protocol
+      mcp_endpoint:
+        uri: http://localhost:8004/sse
+    - toolgroup_id: mcp::aap-lightspeed
+      provider_id: model-context-protocol
+      mcp_endpoint:
+        uri: http://localhost:8005/sse
+  safety:
+    - default_shield_id: llama-guard
+vector_stores:
+  default_provider_id: aap_faiss
+  default_embedding_model:
+    provider_id: sentence-transformers
+    model_id: /.llama/data/embeddings_model
+  annotation_prompt_params:
+    enable_annotations: true
+    annotation_instruction_template: >
+      When appropriate, cite sources at the end of sentences using doc_url and doc_title format.
+      Citing sources is not always required because citations are handled externally.
+      Never include any citation that is in the form '<| file-id |>'.
+logging: null
+server:
+  port: 8322
+  tls_certfile: null
+  tls_keyfile: null
+  tls_cafile: null
+  auth: null
+  disable_ipv6: false
+external_providers_dir: ${env.EXTERNAL_PROVIDERS_DIR:=/.llama/providers.d}

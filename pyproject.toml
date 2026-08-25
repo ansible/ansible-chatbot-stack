@@ -42,6 +42,7 @@ markers = [
     "granite: tests using the in-house Granite LLM via vLLM (requires VLLM_URL, VLLM_API_TOKEN, INFERENCE_MODEL)",
     "openai: tests using the real OpenAI API (requires OPENAI_API_KEY, OPENAI_INFERENCE_MODEL)",
     "azure: tests using Azure OpenAI (requires AZURE_OPENAI_BASE_URL, AZURE_OPENAI_API_KEY, AZURE_OPENAI_INFERENCE_MODEL)",
+    "vertexai: tests using Google Vertex AI (requires VERTEX_AI_CREDENTIALS, VERTEX_AI_PROJECT)",
     "byok: tests using BYOK (Bring Your Own Knowledge) vector database alongside the standard AAP RAG",
     "mcp: tests using controller and lightspeed MCP servers against a mock AAP",
 ]

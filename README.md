@@ -162,6 +162,7 @@ Tests for a given provider are skipped automatically when the required environme
 | Granite (vLLM) | `make test-sanity-granite` | `VLLM_URL`, `VLLM_API_TOKEN`, `INFERENCE_MODEL` |
 | OpenAI | `make test-sanity-openai` | `OPENAI_API_KEY`, `OPENAI_INFERENCE_MODEL` |
 | Azure OpenAI | `make test-sanity-azure` | `AZURE_OPENAI_BASE_URL`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_INFERENCE_MODEL` |
+| Vertex AI | `make test-sanity-vertexai` | `VERTEX_AI_CREDENTIALS`, `VERTEX_AI_PROJECT` |
 
 ### Prerequisites
 
@@ -197,7 +198,20 @@ Run a single provider:
     export AZURE_OPENAI_API_KEY=<YOUR_AZURE_API_KEY>
     export AZURE_OPENAI_INFERENCE_MODEL=<YOUR_DEPLOYMENT_NAME>
     make test-sanity-azure
+
+    # Vertex AI
+    export VERTEX_AI_CREDENTIALS='<SERVICE_ACCOUNT_JSON>'
+    export VERTEX_AI_PROJECT=<YOUR_GCP_PROJECT>
+    # optional: VERTEX_AI_LOCATION (default: us-central1)
+    # optional: VERTEX_AI_INFERENCE_MODEL (default: google/gemini-2.5-pro)
+    make test-sanity-vertexai
 ```
+
+**Note:** In Llama Stack versions 0.4 through 0.5, the Vertex AI provider hardcodes support to the following three
+models:
+- `google/gemini-2.0-flash`
+- `google/gemini-2.5-flash`
+- `google/gemini-2.5-pro`
 
 ### MCP sanity tests
 
@@ -269,6 +283,7 @@ Provider credentials are stored as repository secrets with a `SANITY_` prefix:
 | `SANITY_VLLM_URL`, `SANITY_VLLM_API_TOKEN`, `SANITY_INFERENCE_MODEL` | Granite (vLLM) |
 | `SANITY_OPENAI_API_KEY`, `SANITY_OPENAI_INFERENCE_MODEL` | OpenAI |
 | `SANITY_AZURE_OPENAI_BASE_URL`, `SANITY_AZURE_OPENAI_API_KEY`, `SANITY_AZURE_OPENAI_INFERENCE_MODEL` | Azure OpenAI |
+| `SANITY_VERTEX_AI_CREDENTIALS`, `SANITY_VERTEX_AI_PROJECT` | Vertex AI |
 
 Providers whose secrets are absent are skipped rather than failed.
 The workflow also pulls the MCP server images; MCP tests skip if a pull fails.
