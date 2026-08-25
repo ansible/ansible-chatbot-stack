@@ -202,7 +202,7 @@ Run a single provider:
     # Vertex AI
     export VERTEX_AI_CREDENTIALS='<SERVICE_ACCOUNT_JSON>'
     export VERTEX_AI_PROJECT=<YOUR_GCP_PROJECT>
-    # optional: VERTEX_AI_LOCATION (default: global)
+    # optional: VERTEX_AI_LOCATION (default: us-central1)
     # optional: VERTEX_AI_INFERENCE_MODEL (default: google/gemini-2.5-pro)
     make test-sanity-vertexai
 ```

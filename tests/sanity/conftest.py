@@ -122,8 +122,17 @@ def _unlink_quietly(path):
         pass
 
 
+# Prior value of GOOGLE_APPLICATION_CREDENTIALS (if any) keyed by the ADC temp file
+# path that shadowed it, so _cleanup_vertex_adc_file can restore rather than drop it.
+_PRIOR_GOOGLE_ADC = {}
+
+
 def _write_vertex_adc_file():
-    """Write VERTEX_AI_CREDENTIALS to a 0600 temp file and export its path as ADC.
+    """Write VERTEX_AI_CREDENTIALS to a temp file and export its path as ADC.
+
+    The file is created 0644 (not 0600) because the container may read it as a uid
+    unrelated to the host user: podman gets a --userns keep-id mapping to the host
+    uid, but docker does not, so the container's baked-in uid needs world-read.
 
     The caller must invoke _cleanup_vertex_adc_file on the returned path.
     """
@@ -134,15 +143,20 @@ def _write_vertex_adc_file():
         creds_file.write(os.environ["VERTEX_AI_CREDENTIALS"])
     finally:
         creds_file.close()
-    os.chmod(creds_file.name, 0o600)
+    os.chmod(creds_file.name, 0o644)
+    _PRIOR_GOOGLE_ADC[creds_file.name] = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = creds_file.name
     return creds_file.name
 
 
 def _cleanup_vertex_adc_file(path):
-    """Delete the ADC temp file and drop GOOGLE_APPLICATION_CREDENTIALS if it points at it."""
+    """Delete the ADC temp file and restore any prior GOOGLE_APPLICATION_CREDENTIALS."""
     if path and os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") == path:
-        del os.environ["GOOGLE_APPLICATION_CREDENTIALS"]
+        prior = _PRIOR_GOOGLE_ADC.pop(path, None)
+        if prior:
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = prior
+        else:
+            del os.environ["GOOGLE_APPLICATION_CREDENTIALS"]
     _unlink_quietly(path)
 
 
@@ -229,6 +243,10 @@ def _build_mcp_provider_config(provider):
     _, env_overrides, config = _build_provider_config(provider)
     run_config = str(_SANITY_DIR / f"mcp-{provider}-chatbot-run.yaml")
     if not Path(run_config).exists():
+        # _build_provider_config may have already written a vertexai ADC file and
+        # exported GOOGLE_APPLICATION_CREDENTIALS — clean up before failing so the
+        # real credential doesn't outlive this fixture call.
+        _cleanup_vertex_adc_file(config.get("credentials_file"))
         pytest.fail(f"MCP run config not found: {run_config}")
     if os.environ.get("INFERENCE_MODEL_FILTER"):
         env_overrides["INFERENCE_MODEL_FILTER"] = os.environ["INFERENCE_MODEL_FILTER"]

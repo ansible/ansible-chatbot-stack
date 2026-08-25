@@ -175,7 +175,6 @@ class TestChatbotSanity:
         )
 
 
-@pytest.mark.vertexai
 def test_vertexai_run_config():
     """Vertex AI sanity run configs must declare the provider, ADC project/location, and default model."""
     sanity_dir = Path(__file__).parent
@@ -184,7 +183,7 @@ def test_vertexai_run_config():
         assert "provider_id: vertexai" in text, name
         assert "provider_type: remote::vertexai" in text, name
         assert "project: ${env.VERTEX_AI_PROJECT:=}" in text, name
-        assert "location: ${env.VERTEX_AI_LOCATION:=global}" in text, name
+        assert "location: ${env.VERTEX_AI_LOCATION:=us-central1}" in text, name
         assert "google/gemini-2.5-pro" in text, name
 
 
@@ -199,7 +198,6 @@ def test_vertexai_provider_config_skipped_without_credentials(monkeypatch):
         _build_provider_config("vertexai")
 
 
-@pytest.mark.vertexai
 def test_vertexai_provider_config_defaults(monkeypatch):
     payload = '{"type":"service_account","project_id":"sanity-vertex-project"}'
     monkeypatch.setenv("VERTEX_AI_CREDENTIALS", payload)
@@ -217,6 +215,7 @@ def test_vertexai_provider_config_defaults(monkeypatch):
 
     run_config, env_overrides, config = _build_provider_config("vertexai")
     creds_path = config.pop("credentials_file")
+    monkeypatch.setenv("GOOGLE_APPLICATION_CREDENTIALS", creds_path)
     try:
         assert run_config.endswith("vertexai-chatbot-run.yaml")
         assert config == {"model": _VERTEXAI_DEFAULT_MODEL, "provider": "vertexai"}
@@ -236,6 +235,6 @@ def test_vertexai_provider_config_defaults(monkeypatch):
         assert env_overrides["GOOGLE_APPLICATION_CREDENTIALS"] == _GOOGLE_ADC_CONTAINER_PATH
     finally:
         _cleanup_vertex_adc_file(creds_path)
-        assert not Path(creds_path).exists()
-        assert "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ
+    assert not Path(creds_path).exists()
+    assert "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ
 

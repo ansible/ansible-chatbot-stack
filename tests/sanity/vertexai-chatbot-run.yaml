@@ -15,7 +15,7 @@ providers:
     provider_type: remote::vertexai
     config:
       project: ${env.VERTEX_AI_PROJECT:=}
-      location: ${env.VERTEX_AI_LOCATION:=global}
+      location: ${env.VERTEX_AI_LOCATION:=us-central1}
   - provider_id: sentence-transformers
     provider_type: inline::sentence-transformers
     config: {}

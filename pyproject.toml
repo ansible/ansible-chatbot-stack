@@ -27,7 +27,6 @@ dependencies = [
 [dependency-groups]
 dev = [
     "cachetools>=6.1.0",
-    "google-auth[requests]>=2.40.0",  # Vertex AI ADC for sanity tests
     "kubernetes>=33.1.0",
     "locust>=2.39.1",
     "pre-commit>=4.2.0",
