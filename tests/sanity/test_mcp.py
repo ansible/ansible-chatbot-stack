@@ -22,6 +22,7 @@ import ast
 import json
 import os
 import socket
+import sys
 import warnings
 
 import pytest
@@ -67,12 +68,33 @@ def _post_query(base_url, provider_setup, query, timeout=180, conversation_id=No
     }
     if conversation_id:
         payload["conversation_id"] = conversation_id
-    return requests.post(
+    response = requests.post(
         f"{base_url}/v1/query",
         json=payload,
         headers=_query_headers(),
         timeout=timeout,
     )
+    if response.status_code >= 500:
+        _dump_query_failure(provider_setup, response)
+    return response
+
+
+def _dump_query_failure(provider_setup, response, lines=80):
+    """Write the 500 body and recent chatbot logs so the filter-LLM exception is visible."""
+    sys.stderr.write(
+        f"\n[✗] POST /v1/query returned {response.status_code} "
+        f"for provider={provider_setup.get('provider')!r} "
+        f"model={provider_setup.get('model')!r}\n"
+        f"[✗] Response body:\n{response.text}\n"
+    )
+    output_lines = provider_setup.get("output_lines") or []
+    with _CHATBOT_OUTPUT_LOCK:
+        tail = list(output_lines[-lines:])
+    if tail:
+        sys.stderr.write(f"[✗] Last {len(tail)} chatbot container log lines:\n")
+        for line in tail:
+            sys.stderr.write(line + "\n")
+    sys.stderr.flush()
 
 
 def _response_text(response_data):
