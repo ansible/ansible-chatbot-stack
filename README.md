@@ -294,38 +294,6 @@ AAP Chatbot Quality evaluations available:
     kubectl apply -f my-chatbot-stack-deploy.yaml
 ```
 
-## Appendix - Google Gemini API
-
-Using the [`gemini` remote inference provider](https://llama-stack.readthedocs.io/en/latest/providers/inference/remote_gemini.html):
-
-* Set the environment variable `OPENAI_API_KEY=<YOUR_API_KEY>`
-* Example of a `v1/query` request:
-```json
-{
-    "query": "hello",
-    "system_prompt": "You are a helpful assistant.",
-    "model": "gemini/gemini-2.5-flash",
-    "provider": "gemini"
-}
-```
-
-## Appendix - Google Vertex API
-
-Using the [`gemini` remote inference provider](https://llama-stack.readthedocs.io/en/latest/providers/inference/remote_gemini.html):
-
-* Set a dummy value for the environment variable `OPENAI_API_KEY` (so `gemini` provider within llama-stack, does not complain)
-* Set the path for your Google's Service Account credentials JSON file in the env `GOOGLE_APPLICATION_CREDENTIALS=<PATH_GOOGLE_CRED_JSON_FILE>`
-* Example of a `v1/query` request:
-```json
-{
-    "query": "hello",
-    "system_prompt": "You are a helpful assistant.",
-    "model": "gemini-2.5-flash",
-    "provider": "gemini"
-}
-```
-
-
 ## Appendix - Generating system prompt files
 
 The system prompt files (`ansible-chatbot-system-prompt.txt` and `ansible-chatbot-system-prompt-granite-compat.txt`)
