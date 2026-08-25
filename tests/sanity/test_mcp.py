@@ -80,20 +80,27 @@ def _post_query(base_url, provider_setup, query, timeout=180, conversation_id=No
 
 
 def _dump_query_failure(provider_setup, response, lines=80):
-    """Write the 500 body and recent chatbot logs so the filter-LLM exception is visible."""
-    sys.stderr.write(
+    """Write the 5xx body and recent chatbot logs so the filter-LLM exception is visible."""
+    encoding = sys.stderr.encoding or "utf-8"
+
+    def _write(text):
+        sys.stderr.write(text.encode(encoding, errors="replace").decode(encoding))
+
+    body = response.text
+    if len(body) > 5000:
+        body = f"{body[:5000]}\n... [truncated, {len(body)} chars total]"
+    _write(
         f"\n[✗] POST /v1/query returned {response.status_code} "
         f"for provider={provider_setup.get('provider')!r} "
         f"model={provider_setup.get('model')!r}\n"
-        f"[✗] Response body:\n{response.text}\n"
+        f"[✗] Response body:\n{body}\n"
     )
     output_lines = provider_setup.get("output_lines") or []
-    with _CHATBOT_OUTPUT_LOCK:
-        tail = list(output_lines[-lines:])
+    tail = _lines_from(output_lines, -lines) if lines > 0 else []
     if tail:
-        sys.stderr.write(f"[✗] Last {len(tail)} chatbot container log lines:\n")
+        _write(f"[✗] Last {len(tail)} chatbot container log lines:\n")
         for line in tail:
-            sys.stderr.write(line + "\n")
+            _write(line + "\n")
     sys.stderr.flush()
 
 
