@@ -38,18 +38,17 @@ MCP_HEADERS = json.dumps(
 )
 
 _CONTROLLER_HINTS = ("job_template", "job_templates", "workflow_job_template", "inventories")
+# Substrings of Lightspeed MCP tool names (operationIds from aap-lightspeed-api.yaml).
 _LIGHTSPEED_HINTS = (
-    "health_status",
-    "health_retrieve",
-    "health_status_chatbot",
-    "contentmatches",
+    "ai_generations_playbook",
+    "generations_playbook",
+    "ai_generations_role",
+    "ai_contentmatches",
+    "ai_explanations",
+    "wca_api_key",
+    "wca_model_id",
     "me_summary",
     "me_token",
-    "wca_api",
-    "wca_model",
-    "check_status",
-    "check_retrieve",
-    "explanations",
 )
 
 
@@ -360,7 +359,7 @@ class TestMCPSanity:
         response = _post_query(
             base_url,
             mcp_provider_setup,
-            "Check the Ansible Lightspeed health status and chatbot health.",
+            "Use Ansible Lightspeed to generate a playbook that prints 'Hello, world'.",
         )
         assert response.status_code == 200, (
             f"Expected 200, got {response.status_code}: {response.text}"
@@ -380,10 +379,10 @@ class TestMCPSanity:
         )
         mcp_filter_debug(
             new_lines,
-            "Check the Ansible Lightspeed health status and chatbot health.",
+            "Use Ansible Lightspeed to generate a playbook that prints 'Hello, world'.",
         )
         message = (
-            "Expected lightspeed tool family (e.g. health_status) in the filtered tool "
+            "Expected lightspeed tool family (e.g. ai_generations_playbook_create) in the filtered tool "
             f"list or mock AAP. filtered={names[:20]!r} mock_paths={tool_paths!r}"
         )
         # Noted as flaky locally (model non-determinism in which tools get filtered
