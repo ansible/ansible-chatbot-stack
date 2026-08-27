@@ -100,7 +100,7 @@ registered_resources:
     - metadata: {}
       model_id: ${env.VERTEX_AI_INFERENCE_MODEL:=google/gemini-2.5-pro}
       provider_id: vertexai
-      provider_model_id: ${env.VERTEX_AI_INFERENCE_MODEL:=google/gemini-2.5-pro}
+      provider_model_id: ${env.VERTEX_AI_PROVIDER_MODEL:=publishers/google/models/gemini-2.5-pro}
     - metadata:
         embedding_dimension: 384
       model_id: sentence-transformers/all-mpnet-base-v2

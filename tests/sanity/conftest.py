@@ -30,6 +30,7 @@ _OPENAI_REQUIRED = ["OPENAI_API_KEY", "OPENAI_INFERENCE_MODEL"]
 _AZURE_REQUIRED = ["AZURE_OPENAI_BASE_URL", "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_INFERENCE_MODEL"]
 _VERTEXAI_REQUIRED = ["VERTEX_AI_CREDENTIALS", "VERTEX_AI_PROJECT"]
 _VERTEXAI_DEFAULT_MODEL = "google/gemini-2.5-pro"
+_VERTEXAI_DEFAULT_PROVIDER_MODEL = "publishers/google/models/gemini-2.5-pro"
 _GOOGLE_ADC_CONTAINER_PATH = "/.llama/secrets/google-application-credentials.json"
 
 _SANITY_DIR = Path(__file__).parent
@@ -218,16 +219,23 @@ def _build_provider_config(provider):
         _check_required_vars(_VERTEXAI_REQUIRED)
         creds_path = _write_vertex_adc_file()
         model = os.environ.get("VERTEX_AI_INFERENCE_MODEL") or _VERTEXAI_DEFAULT_MODEL
+        provider_model = (
+            os.environ.get("VERTEX_AI_PROVIDER_MODEL") or _VERTEXAI_DEFAULT_PROVIDER_MODEL
+        )
         env_overrides = {
             "GOOGLE_APPLICATION_CREDENTIALS": creds_path,
             "VERTEX_AI_PROJECT": os.environ["VERTEX_AI_PROJECT"],
             "VERTEX_AI_INFERENCE_MODEL": model,
+            "VERTEX_AI_PROVIDER_MODEL": provider_model,
         }
         if os.environ.get("VERTEX_AI_LOCATION"):
             env_overrides["VERTEX_AI_LOCATION"] = os.environ["VERTEX_AI_LOCATION"]
         run_config = str(_SANITY_DIR / "vertexai-chatbot-run.yaml")
         config = {
-            "model": model,
+            # POST /v1/query must use the provider_model_id suffix: llama-stack registers
+            # models as "{provider_id}/{provider_model_id}" (see register_model in
+            # llama_stack/core/routing_tables/models.py), not "{provider_id}/{model_id}".
+            "model": provider_model,
             "provider": "vertexai",
             "credentials_file": creds_path,
         }
@@ -250,6 +258,11 @@ def _build_mcp_provider_config(provider):
         pytest.fail(f"MCP run config not found: {run_config}")
     if os.environ.get("INFERENCE_MODEL_FILTER"):
         env_overrides["INFERENCE_MODEL_FILTER"] = os.environ["INFERENCE_MODEL_FILTER"]
+    elif provider == "vertexai":
+        # tools_filter.model_id is passed directly to inference_api.chat_completion(),
+        # which expects a registered llama-stack model identifier (provider/model...),
+        # not the bare Vertex resource path used in POST /v1/query "model".
+        env_overrides["INFERENCE_MODEL_FILTER"] = f"vertexai/{config['model']}"
     return run_config, env_overrides, dict(config)
 
 
