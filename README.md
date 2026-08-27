@@ -162,7 +162,7 @@ Tests for a given provider are skipped automatically when the required environme
 | Granite (vLLM) | `make test-sanity-granite` | `VLLM_URL`, `VLLM_API_TOKEN`, `INFERENCE_MODEL` |
 | OpenAI | `make test-sanity-openai` | `OPENAI_API_KEY`, `OPENAI_INFERENCE_MODEL` |
 | Azure OpenAI | `make test-sanity-azure` | `AZURE_OPENAI_BASE_URL`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_INFERENCE_MODEL` |
-| Vertex AI | `make test-sanity-vertexai` | `VERTEX_AI_CREDENTIALS`, `VERTEX_AI_PROJECT` |
+| Vertex AI | `make test-sanity-vertexai` | `VERTEX_AI_CREDENTIALS`, `VERTEX_AI_PROJECT` (see [Vertex AI model IDs](#vertex-ai-model-ids-llama-stack-06) below) |
 
 ### Prerequisites
 
@@ -199,19 +199,70 @@ Run a single provider:
     export AZURE_OPENAI_INFERENCE_MODEL=<YOUR_DEPLOYMENT_NAME>
     make test-sanity-azure
 
-    # Vertex AI
+    # Vertex AI (see "Vertex AI model IDs" below — two optional model env vars)
     export VERTEX_AI_CREDENTIALS='<SERVICE_ACCOUNT_JSON>'
     export VERTEX_AI_PROJECT=<YOUR_GCP_PROJECT>
-    # optional: VERTEX_AI_LOCATION (default: us-central1)
-    # optional: VERTEX_AI_INFERENCE_MODEL (default: google/gemini-2.5-pro)
+    export VERTEX_AI_LOCATION=us-central1   # optional (default: us-central1)
+    export VERTEX_AI_INFERENCE_MODEL=google/gemini-2.5-pro   # optional
+    export VERTEX_AI_PROVIDER_MODEL=publishers/google/models/gemini-2.5-pro   # optional
     make test-sanity-vertexai
 ```
 
-**Note:** In Llama Stack versions 0.4 through 0.5, the Vertex AI provider hardcodes support to the following three
-models:
-- `google/gemini-2.0-flash`
-- `google/gemini-2.5-flash`
-- `google/gemini-2.5-pro`
+#### Vertex AI model IDs (Llama Stack 0.6)
+
+With **Llama Stack 0.6** and **Lightspeed Core Stack 0.6.x**, Vertex model naming changed.
+Google's ListModels API returns full resource paths such as
+`publishers/google/models/gemini-2.5-pro`, while Lightspeed query APIs still use
+shorter `google/...` identifiers internally. **One env var is not enough** — use
+the two variables below (sanity run YAMLs wire them into the correct fields).
+
+| Variable | Purpose | Default (sanity tests) |
+|----------|---------|------------------------|
+| `VERTEX_AI_INFERENCE_MODEL` | Friendly `model_id` in run YAML (`registered_resources.models`) | `google/gemini-2.5-pro` |
+| `VERTEX_AI_PROVIDER_MODEL` | Vertex `provider_model_id` for registration **and** the `"model"` field in `POST /v1/query` | `publishers/google/models/gemini-2.5-pro` |
+
+**Do not** set `VERTEX_AI_INFERENCE_MODEL` to the `publishers/google/models/...`
+path. That value belongs in `VERTEX_AI_PROVIDER_MODEL` only. Using the full Vertex
+path everywhere causes startup failures, `404 Model not found`, or `500` errors
+during inference.
+
+After the stack starts, confirm registration:
+
+```shell
+curl -s http://localhost:8322/v1/models | jq '.models[] | select(.model_type=="llm") | {identifier, provider_resource_id}'
+```
+
+Expect something like:
+
+```json
+{
+  "identifier": "vertexai/publishers/google/models/gemini-2.5-pro",
+  "provider_resource_id": "publishers/google/models/gemini-2.5-pro"
+}
+```
+
+For manual `/v1/query` calls, send the **provider resource path** as `"model"` and
+`"provider": "vertexai"` (not the full `vertexai/...` identifier):
+
+```json
+{
+  "query": "What is AAP?",
+  "model": "publishers/google/models/gemini-2.5-pro",
+  "provider": "vertexai"
+}
+```
+
+Other common Gemini models (adjust region/project availability as needed):
+
+| Model | `VERTEX_AI_INFERENCE_MODEL` | `VERTEX_AI_PROVIDER_MODEL` |
+|-------|----------------------------|----------------------------|
+| Gemini 2.5 Pro | `google/gemini-2.5-pro` | `publishers/google/models/gemini-2.5-pro` |
+| Gemini 2.5 Flash | `google/gemini-2.5-flash` | `publishers/google/models/gemini-2.5-flash` |
+| Gemini 2.0 Flash | `google/gemini-2.0-flash` | `publishers/google/models/gemini-2.0-flash` |
+
+**Llama Stack 0.4–0.5 (legacy):** the Vertex provider used short `google/gemini-...`
+IDs everywhere and did not use `publishers/google/models/...` registration paths.
+That layout does not apply to the current stack version in this repository.
 
 ### MCP sanity tests
 
@@ -223,6 +274,13 @@ failing tool call does not take the chatbot down.
 `make test-sanity` includes this suite. MCP tests use the same LLM provider
 variables as above and skip a provider when its credentials are unset. They also
 skip (rather than fail) if the MCP images cannot be pulled.
+
+**Vertex AI + MCP:** tool filtering uses a third identifier format internally.
+Sanity tests set `INFERENCE_MODEL_FILTER` automatically to
+`vertexai/<VERTEX_AI_PROVIDER_MODEL>` (for example
+`vertexai/publishers/google/models/gemini-2.5-pro`). If you override
+`INFERENCE_MODEL_FILTER` manually for Vertex MCP runs, use that `vertexai/...`
+form — not the bare `publishers/google/models/...` path.
 
 **Granite (vLLM) requires tool-calling enabled on the server, and the granite-compat
 system prompt.** Two things must both be true for granite to actually invoke a tool:
@@ -284,6 +342,7 @@ Provider credentials are stored as repository secrets with a `SANITY_` prefix:
 | `SANITY_OPENAI_API_KEY`, `SANITY_OPENAI_INFERENCE_MODEL` | OpenAI |
 | `SANITY_AZURE_OPENAI_BASE_URL`, `SANITY_AZURE_OPENAI_API_KEY`, `SANITY_AZURE_OPENAI_INFERENCE_MODEL` | Azure OpenAI |
 | `SANITY_VERTEX_AI_CREDENTIALS`, `SANITY_VERTEX_AI_PROJECT` | Vertex AI |
+| `SANITY_VERTEX_AI_LOCATION`, `SANITY_VERTEX_AI_INFERENCE_MODEL`, `SANITY_VERTEX_AI_PROVIDER_MODEL` | Vertex AI (optional; see [Vertex AI model IDs](#vertex-ai-model-ids-llama-stack-06)) |
 
 Providers whose secrets are absent are skipped rather than failed.
 The workflow also pulls the MCP server images; MCP tests skip if a pull fails.

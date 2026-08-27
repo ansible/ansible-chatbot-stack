@@ -177,7 +177,10 @@ class TestChatbotSanity:
 
 def test_vertexai_run_config():
     """Vertex AI sanity run configs must declare the provider, ADC project/location, and default model."""
-    from tests.sanity.conftest import _VERTEXAI_DEFAULT_MODEL
+    from tests.sanity.conftest import (
+        _VERTEXAI_DEFAULT_MODEL,
+        _VERTEXAI_DEFAULT_PROVIDER_MODEL,
+    )
 
     sanity_dir = Path(__file__).parent
     for name in ("vertexai-chatbot-run.yaml", "mcp-vertexai-chatbot-run.yaml"):
@@ -187,6 +190,10 @@ def test_vertexai_run_config():
         assert "project: ${env.VERTEX_AI_PROJECT:=}" in text, name
         assert "location: ${env.VERTEX_AI_LOCATION:=us-central1}" in text, name
         assert _VERTEXAI_DEFAULT_MODEL in text, name
+        assert (
+            f"provider_model_id: ${{env.VERTEX_AI_PROVIDER_MODEL:={_VERTEXAI_DEFAULT_PROVIDER_MODEL}}}"
+            in text
+        ), name
 
 
 def test_vertexai_provider_config_skipped_without_credentials(monkeypatch):
@@ -209,6 +216,7 @@ def test_vertexai_provider_config_defaults(monkeypatch):
     from tests.sanity.conftest import (
         _GOOGLE_ADC_CONTAINER_PATH,
         _VERTEXAI_DEFAULT_MODEL,
+        _VERTEXAI_DEFAULT_PROVIDER_MODEL,
         _build_provider_config,
         _cleanup_vertex_adc_file,
         _google_adc_volume_mount,
@@ -219,13 +227,17 @@ def test_vertexai_provider_config_defaults(monkeypatch):
     monkeypatch.setenv("GOOGLE_APPLICATION_CREDENTIALS", creds_path)
     try:
         assert run_config.endswith("vertexai-chatbot-run.yaml")
-        assert config == {"model": _VERTEXAI_DEFAULT_MODEL, "provider": "vertexai"}
+        assert config == {
+            "model": _VERTEXAI_DEFAULT_PROVIDER_MODEL,
+            "provider": "vertexai",
+        }
         assert Path(creds_path).is_file()
         assert Path(creds_path).read_text() == payload
         assert os.environ["GOOGLE_APPLICATION_CREDENTIALS"] == creds_path
         assert env_overrides["GOOGLE_APPLICATION_CREDENTIALS"] == creds_path
         assert env_overrides["VERTEX_AI_PROJECT"] == "sanity-vertex-project"
         assert env_overrides["VERTEX_AI_INFERENCE_MODEL"] == _VERTEXAI_DEFAULT_MODEL
+        assert env_overrides["VERTEX_AI_PROVIDER_MODEL"] == _VERTEXAI_DEFAULT_PROVIDER_MODEL
         assert "VERTEX_AI_LOCATION" not in env_overrides
         assert "VERTEX_AI_CREDENTIALS" not in env_overrides
 
