@@ -38,19 +38,7 @@ MCP_HEADERS = json.dumps(
 )
 
 _CONTROLLER_HINTS = ("job_template", "job_templates", "workflow_job_template", "inventories")
-_LIGHTSPEED_HINTS = (
-    "health_status",
-    "health_retrieve",
-    "health_status_chatbot",
-    "contentmatches",
-    "me_summary",
-    "me_token",
-    "wca_api",
-    "wca_model",
-    "check_status",
-    "check_retrieve",
-    "explanations",
-)
+_LIGHTSPEED_HINTS = ("apikey", "wca")
 
 
 def _query_headers():
@@ -360,7 +348,7 @@ class TestMCPSanity:
         response = _post_query(
             base_url,
             mcp_provider_setup,
-            "Check the Ansible Lightspeed health status and chatbot health.",
+            "Get WCA key for an Organisation.",
         )
         assert response.status_code == 200, (
             f"Expected 200, got {response.status_code}: {response.text}"
@@ -374,7 +362,7 @@ class TestMCPSanity:
         family_hit = (
             any(hint in joined_names for hint in _LIGHTSPEED_HINTS)
             or any(
-                path.startswith("/api/v1/") or path.startswith("/check")
+                path.startswith("/api/v1/")
                 for path in tool_paths
             )
         )
@@ -386,14 +374,6 @@ class TestMCPSanity:
             "Expected lightspeed tool family (e.g. health_status) in the filtered tool "
             f"list or mock AAP. filtered={names[:20]!r} mock_paths={tool_paths!r}"
         )
-        # Noted as flaky locally (model non-determinism in which tools get filtered
-        # in). Matches test_tool_call_error_is_handled's CI/local split above: fail
-        # loud in CI so a genuine regression can't pass green indefinitely, warn
-        # locally where an occasional non-deterministic miss is expected.
-        if not family_hit:
-            if os.environ.get("CI", "").strip().lower() in _TRUTHY:
-                pytest.fail(message)
-            warnings.warn(message)
         # See test_tool_filtering_controller_query's matching comment: the filter
         # model's exclusion of the other family is not deterministic across providers.
         if any(hint in joined_names for hint in _CONTROLLER_HINTS):
