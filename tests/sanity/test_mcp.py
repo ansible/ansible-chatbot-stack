@@ -366,14 +366,18 @@ class TestMCPSanity:
                 for path in tool_paths
             )
         )
-        mcp_filter_debug(
-            new_lines,
-            "Check the Ansible Lightspeed health status and chatbot health.",
-        )
+        mcp_filter_debug(new_lines, "Get WCA key for an Organisation.")
         message = (
-            "Expected lightspeed tool family (e.g. health_status) in the filtered tool "
+            "Expected lightspeed tool family (e.g. apikey, wca) in the filtered tool "
             f"list or mock AAP. filtered={names[:20]!r} mock_paths={tool_paths!r}"
         )
+        # Matches test_tool_call_error_is_handled's CI/local split above: fail loud
+        # in CI so a genuine regression can't pass green indefinitely, warn locally
+        # where an occasional non-deterministic miss is expected.
+        if not family_hit:
+            if os.environ.get("CI", "").strip().lower() in _TRUTHY:
+                pytest.fail(message)
+            warnings.warn(message)
         # See test_tool_filtering_controller_query's matching comment: the filter
         # model's exclusion of the other family is not deterministic across providers.
         if any(hint in joined_names for hint in _CONTROLLER_HINTS):
