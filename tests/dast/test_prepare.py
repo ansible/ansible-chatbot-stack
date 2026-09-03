@@ -59,6 +59,30 @@ def test_prepare_writes_har_and_ready_file(monkeypatch, tmp_path):
     assert len(payload["log"]["entries"]) == 1
 
 
+def test_prepare_rejects_output_path_outside_allowed_roots(monkeypatch, capsys):
+    monkeypatch.setenv("VLLM_URL", "http://vllm.example")
+    monkeypatch.setenv("VLLM_API_TOKEN", "token")
+    monkeypatch.setenv("INFERENCE_MODEL", "granite-demo")
+
+    assert prepare.main(["--output", "/etc/passwd"]) == 1
+    captured = capsys.readouterr()
+    assert "Refusing to run" in captured.err
+
+
+def test_prepare_rejects_ready_file_outside_allowed_roots(monkeypatch, capsys, tmp_path):
+    monkeypatch.setenv("VLLM_URL", "http://vllm.example")
+    monkeypatch.setenv("VLLM_API_TOKEN", "token")
+    monkeypatch.setenv("INFERENCE_MODEL", "granite-demo")
+
+    har_path = tmp_path / "chatbot-requests.har"
+    assert (
+        prepare.main(["--output", str(har_path), "--ready-file", "../../../../etc/cron.d/x"])
+        == 1
+    )
+    captured = capsys.readouterr()
+    assert "Refusing to run" in captured.err
+
+
 def test_prepare_fails_when_config_probe_is_not_ok(monkeypatch, tmp_path):
     monkeypatch.setenv("VLLM_URL", "http://vllm.example")
     monkeypatch.setenv("VLLM_API_TOKEN", "token")

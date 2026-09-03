@@ -15,6 +15,7 @@ import argparse
 import os
 import signal
 import sys
+import tempfile
 import threading
 from pathlib import Path
 
@@ -45,6 +46,22 @@ def _secret_values(env_overrides):
         for key, value in env_overrides.items()
         if value and any(word in key.upper() for word in SECRET_ENV_KEYWORDS)
     ]
+
+
+_ALLOWED_PATH_ROOTS = (_REPO_ROOT, Path(tempfile.gettempdir()).resolve())
+
+
+def _resolve_under_repo(raw_path):
+    """Resolve raw_path, rejecting anything outside the repo or the system temp dir."""
+    path = Path(raw_path)
+    if not path.is_absolute():
+        path = _REPO_ROOT / path
+    resolved = path.resolve()
+    if not any(
+        resolved == root or root in resolved.parents for root in _ALLOWED_PATH_ROOTS
+    ):
+        raise ValueError(f"path escapes allowed directories: {raw_path}")
+    return resolved
 
 
 def parse_args(argv=None):
@@ -95,6 +112,13 @@ def main(argv=None):
     if args.keep_alive and hasattr(signal, "SIGHUP"):
         signal.signal(signal.SIGHUP, signal.SIG_IGN)
 
+    try:
+        output_path = _resolve_under_repo(args.output)
+        ready_path = _resolve_under_repo(args.ready_file)
+    except ValueError as exc:
+        print(f"Refusing to run: {exc}", file=sys.stderr)
+        return 1
+
     previous_cwd = os.getcwd()
     process = runtime = name = env_file_path = credentials_file = None
     try:
@@ -105,12 +129,6 @@ def main(argv=None):
         run_config, env_overrides, config = built
         credentials_file = config.pop("credentials_file", None)
 
-        output_path = Path(args.output)
-        if not output_path.is_absolute():
-            output_path = _REPO_ROOT / output_path
-        ready_path = Path(args.ready_file)
-        if not ready_path.is_absolute():
-            ready_path = _REPO_ROOT / ready_path
         ready_path.unlink(missing_ok=True)
 
         process, runtime, name, env_file_path = _start_sanity_server(
