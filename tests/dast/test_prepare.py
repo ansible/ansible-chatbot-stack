@@ -1,6 +1,7 @@
 """Unit tests for the DAST prepare CLI (no live chatbot or LLM)."""
 
 from datetime import datetime, timezone
+from pathlib import Path
 import json
 
 import pytest
@@ -82,6 +83,23 @@ def test_prepare_rejects_ready_file_outside_allowed_roots(monkeypatch, capsys, t
     )
     captured = capsys.readouterr()
     assert "Refusing to run" in captured.err
+
+
+def test_resolve_under_repo_expands_tilde(monkeypatch, tmp_path):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    resolved = prepare._resolve_under_repo("~/out.har")
+    assert resolved == tmp_path / "out.har"
+
+
+def test_resolve_under_repo_allows_tmp_directory():
+    resolved = prepare._resolve_under_repo("/tmp/dast-prepare-test.har")
+    assert resolved == Path("/tmp/dast-prepare-test.har")
+
+
+def test_resolve_under_repo_rejects_missing_parent_dir(tmp_path):
+    missing = tmp_path / "does-not-exist" / "out.har"
+    with pytest.raises(ValueError, match="parent directory does not exist"):
+        prepare._resolve_under_repo(missing)
 
 
 def test_prepare_fails_when_config_probe_is_not_ok(monkeypatch, tmp_path):

@@ -43,12 +43,12 @@ def _secret_values(env_overrides):
     return [value for value in env_overrides.values() if value]
 
 
-_ALLOWED_PATH_ROOTS = (_REPO_ROOT, Path(tempfile.gettempdir()).resolve())
+_ALLOWED_PATH_ROOTS = (_REPO_ROOT, Path(tempfile.gettempdir()).resolve(), Path("/tmp"))
 
 
 def _resolve_under_repo(raw_path):
-    """Resolve raw_path, rejecting anything outside the repo or the system temp dir."""
-    path = Path(raw_path)
+    """Resolve raw_path, rejecting anything outside the repo or a system temp dir."""
+    path = Path(raw_path).expanduser()
     if not path.is_absolute():
         path = _REPO_ROOT / path
     resolved = path.resolve()
@@ -56,6 +56,8 @@ def _resolve_under_repo(raw_path):
         resolved == root or root in resolved.parents for root in _ALLOWED_PATH_ROOTS
     ):
         raise ValueError(f"path escapes allowed directories: {raw_path}")
+    if not resolved.parent.is_dir():
+        raise ValueError(f"parent directory does not exist: {resolved.parent}")
     return resolved
 
 
