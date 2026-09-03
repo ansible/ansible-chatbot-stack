@@ -182,10 +182,17 @@ jobs:
           fi
 
       - name: Check scan results
-        if: steps.rapidast.outcome == 'failure'
+        if: always()
         run: |
-          echo "::error::RapiDAST scan failed or found issues"
-          exit 1
+          if [ "${{ steps.rapidast.outcome }}" == "failure" ]; then
+            echo "::error::RapiDAST scan step failed to run"
+            exit 1
+          fi
+          if ! jq -e '[.site[].alerts[] | select((.riskcode|tonumber) >= 3)] | length == 0' \
+               results/*/*/zap/zap-report.json > /dev/null; then
+            echo "::error::RapiDAST found High-risk alerts"
+            exit 1
+          fi
 
       - name: Cleanup
         if: always()
