@@ -92,6 +92,7 @@ jobs:
       - name: Start granite chatbot and generate HAR
         run: |
           set -euo pipefail
+          rm -f dast-target.ready chatbot-requests.har
           uv run --frozen --group test python tests/dast/prepare.py \
             --output chatbot-requests.har \
             --keep-alive \
