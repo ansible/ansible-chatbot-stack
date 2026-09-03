@@ -36,6 +36,15 @@ from tests.sanity.conftest import (  # noqa: E402
 )
 
 READY_FILE_DEFAULT = "dast-target.ready"
+SECRET_ENV_KEYWORDS = ("TOKEN", "KEY", "SECRET", "PASSWORD")
+
+
+def _secret_values(env_overrides):
+    return [
+        value
+        for key, value in env_overrides.items()
+        if value and any(word in key.upper() for word in SECRET_ENV_KEYWORDS)
+    ]
 
 
 def parse_args(argv=None):
@@ -115,7 +124,7 @@ def main(argv=None):
         if not responses or responses[0].status_code != 200:
             print("GET /v1/config did not return 200 — chatbot is not ready", file=sys.stderr)
             return 1
-        recorder.save(output_path)
+        recorder.save(output_path, redact_values=_secret_values(env_overrides))
         ready_path.write_text("ready\n", encoding="utf-8")
         print(
             f"[✓] HAR written to {output_path} ({len(recorder.entries)} entries)",

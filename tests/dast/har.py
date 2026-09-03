@@ -202,14 +202,33 @@ class HarRecorder:
             }
         }
 
-    def save(self, path):
+    def save(self, path, redact_values=None):
+        payload = self.to_har()
+        secrets = [value for value in (redact_values or []) if value]
+        if secrets:
+            payload = _redact(payload, secrets)
         with open(path, "w", encoding="utf-8") as handle:
-            json.dump(self.to_har(), handle, indent=2)
+            json.dump(payload, handle, indent=2)
             handle.write("\n")
 
 
 def json_dumps_bytes(payload):
     return json.dumps(payload, separators=(",", ":")).encode("utf-8")
+
+
+REDACTED = "***REDACTED***"
+
+
+def _redact(value, secrets):
+    if isinstance(value, str):
+        for secret in secrets:
+            value = value.replace(secret, REDACTED)
+        return value
+    if isinstance(value, list):
+        return [_redact(item, secrets) for item in value]
+    if isinstance(value, dict):
+        return {key: _redact(val, secrets) for key, val in value.items()}
+    return value
 
 
 def run_probes(recorder, base_url, provider_config):
