@@ -69,7 +69,7 @@ help:
 	@echo "  test-sanity-byok    - Run BYOK sanity tests (requires inference provider env vars)"
 	@echo "  test-sanity-mcp     - Run MCP sanity tests (requires inference provider env vars + MCP images)"
 	@echo "                        Set MCP_DEBUG=1 to print tool-filter before/after counts"
-	@echo "  test-dast-har      - Start granite chatbot and write chatbot-requests.har for RapiDAST"
+	@echo "  test-dast-har       - Start granite chatbot and write chatbot-requests.har for RapiDAST"
 	@echo ""
 	@echo "Required Environment variables:"
 	@echo "  ANSIBLE_CHATBOT_VERSION                - Version tag for the image (default: $(ANSIBLE_CHATBOT_VERSION))"
