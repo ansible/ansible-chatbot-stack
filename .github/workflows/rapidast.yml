@@ -136,7 +136,7 @@ jobs:
             quay.io/redhatproductsecurity/rapidast:latest \
             --config /opt/rapidast/work/rapidast-config.yml
 
-          if [ -f results/*/*/zap/zap-report.json ]; then
+          if compgen -G "results/*/*/zap/zap-report.json" > /dev/null; then
             cat results/*/*/zap/zap-report.json
           else
             echo "No ZAP report found"
@@ -168,7 +168,7 @@ jobs:
             echo "- **HAR entries**: $(jq '.log.entries | length' chatbot-requests.har)" >> "$GITHUB_STEP_SUMMARY"
           fi
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          if [ -f results/*/*/zap/zap-report.json ]; then
+          if compgen -G "results/*/*/zap/zap-report.json" > /dev/null; then
             echo "Scan completed. Results available in artifacts." >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
             echo "### Findings by Severity" >> "$GITHUB_STEP_SUMMARY"
@@ -198,6 +198,7 @@ jobs:
         if: always()
         run: |
           if [ -n "${DAST_PID:-}" ]; then
+            pkill -TERM -P "$DAST_PID" || true
             kill "$DAST_PID" || true
             wait "$DAST_PID" || true
           fi
