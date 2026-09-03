@@ -206,6 +206,9 @@ jobs:
           if [ -n "${DAST_PID:-}" ]; then
             pkill -TERM -P "$DAST_PID" || true
             kill "$DAST_PID" || true
-            wait "$DAST_PID" || true
+            for _ in $(seq 1 20); do
+              kill -0 "$DAST_PID" 2>/dev/null || break
+              sleep 1
+            done
           fi
           podman ps -aq --filter name=ansible-chatbot-sanity-granite | xargs -r podman rm -f || true
