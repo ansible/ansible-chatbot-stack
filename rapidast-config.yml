@@ -27,5 +27,3 @@ scanners:
       disabledRules: "2,10015,10024,10027,10054,10096,10109,10112"
     activeScan:
       maxScanDurationInMins: 30
-    miscOptions:
-      additionalAddons: ""
