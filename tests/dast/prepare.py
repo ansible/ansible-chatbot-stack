@@ -37,15 +37,10 @@ from tests.sanity.conftest import (  # noqa: E402
 )
 
 READY_FILE_DEFAULT = "dast-target.ready"
-SECRET_ENV_KEYWORDS = ("TOKEN", "KEY", "SECRET", "PASSWORD")
 
 
 def _secret_values(env_overrides):
-    return [
-        value
-        for key, value in env_overrides.items()
-        if value and any(word in key.upper() for word in SECRET_ENV_KEYWORDS)
-    ]
+    return [value for value in env_overrides.values() if value]
 
 
 _ALLOWED_PATH_ROOTS = (_REPO_ROOT, Path(tempfile.gettempdir()).resolve())
