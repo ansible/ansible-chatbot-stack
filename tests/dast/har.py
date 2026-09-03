@@ -21,6 +21,7 @@ import requests
 
 
 DEFAULT_HAR_NAME = "chatbot-requests.har"
+CONFIG_PATH = "/v1/config"
 QUERY_PATH = "/v1/query"
 JSON_MIME = "application/json"
 
@@ -44,7 +45,7 @@ def granite_probes(provider_config):
     empty_query = {**query, "query": ""}
     ansible_query = {**query, "query": "What is Ansible?"}
     return [
-        Probe("GET", "/v1/config"),
+        Probe("GET", CONFIG_PATH),
         Probe("GET", "/v1/models"),
         Probe("POST", QUERY_PATH, json_body=query, timeout=120),
         Probe("POST", "/v1/streaming_query", json_body=query, stream=True, timeout=120),
@@ -233,20 +234,24 @@ def _redact(value, secrets):
 
 
 def run_probes(recorder, base_url, provider_config):
-    """Issue granite DAST probes and record them. Returns the list of responses."""
-    responses = []
+    """Issue granite DAST probes and record them.
+
+    Returns a list of (probe, response) pairs; response is None for a probe
+    that raised instead of being silently dropped from the result list.
+    """
+    results = []
     for probe in granite_probes(provider_config):
         url = f"{base_url.rstrip('/')}{probe.path}"
         try:
-            responses.append(
-                recorder.request(
-                    probe.method,
-                    url,
-                    json_body=probe.json_body,
-                    stream=probe.stream,
-                    timeout=probe.timeout,
-                )
+            response = recorder.request(
+                probe.method,
+                url,
+                json_body=probe.json_body,
+                stream=probe.stream,
+                timeout=probe.timeout,
             )
         except requests.RequestException as exc:
             print(f"probe {probe.method} {probe.path} failed: {exc}", file=sys.stderr)
-    return responses
+            response = None
+        results.append((probe, response))
+    return results

@@ -5,6 +5,7 @@ import json
 import threading
 
 import pytest
+import requests
 
 from tests.dast.har import QUERY_PATH, HarRecorder, granite_probes, json_dumps_bytes, run_probes
 
@@ -99,10 +100,33 @@ def test_har_recorder_round_trip(tmp_path, http_server):
 def test_run_probes_records_every_spec(http_server):
     recorder = HarRecorder()
     config = {"model": "granite/demo", "provider": "granite"}
-    responses = run_probes(recorder, http_server, config)
-    assert len(responses) == len(granite_probes(config))
-    assert len(recorder.entries) == len(responses)
-    assert all(item.status_code == 200 for item in responses)
+    results = run_probes(recorder, http_server, config)
+    assert len(results) == len(granite_probes(config))
+    assert len(recorder.entries) == len(results)
+    assert all(response.status_code == 200 for _probe, response in results)
+
+
+class _FlakyRecorder(HarRecorder):
+    """HarRecorder that raises for one specific path, to exercise run_probes resilience."""
+
+    def request(self, method, url, **kwargs):
+        if url.endswith("/v1/models"):
+            raise requests.ConnectionError("boom")
+        return super().request(method, url, **kwargs)
+
+
+def test_run_probes_tolerates_a_failing_probe(http_server, capsys):
+    recorder = _FlakyRecorder()
+    config = {"model": "granite/demo", "provider": "granite"}
+    results = run_probes(recorder, http_server, config)
+
+    assert len(results) == len(granite_probes(config))
+    failed = [response for probe, response in results if probe.path == "/v1/models"]
+    assert failed == [None]
+    config_responses = [response for probe, response in results if probe.path == "/v1/config"]
+    assert config_responses[0].status_code == 200
+    assert len(recorder.entries) == len(results) - 1
+    assert "probe GET /v1/models failed" in capsys.readouterr().err
 
 
 def test_json_dumps_bytes_is_compact():

@@ -6,6 +6,7 @@ import json
 import pytest
 
 from tests.dast import prepare
+from tests.dast.har import CONFIG_PATH, Probe
 
 
 @pytest.fixture(autouse=True)
@@ -46,7 +47,7 @@ def test_prepare_writes_har_and_ready_file(monkeypatch, tmp_path):
             duration_ms=1.0,
             response_body=b'{"ok":true}',
         )
-        return [_Resp()]
+        return [(Probe("GET", CONFIG_PATH), _Resp())]
 
     monkeypatch.setattr(prepare, "run_probes", _fake_probes)
 
@@ -91,7 +92,27 @@ def test_prepare_fails_when_config_probe_is_not_ok(monkeypatch, tmp_path):
     class _Resp:
         status_code = 503
 
-    monkeypatch.setattr(prepare, "run_probes", lambda *args, **kwargs: [_Resp()])
+    monkeypatch.setattr(
+        prepare, "run_probes", lambda *args, **kwargs: [(Probe("GET", CONFIG_PATH), _Resp())]
+    )
+    har_path = tmp_path / "chatbot-requests.har"
+    assert prepare.main(["--output", str(har_path)]) == 1
+    assert not har_path.exists()
+
+
+def test_prepare_fails_when_config_probe_missing_even_if_other_probe_ok(monkeypatch, tmp_path):
+    monkeypatch.setenv("VLLM_URL", "http://vllm.example")
+    monkeypatch.setenv("VLLM_API_TOKEN", "token")
+    monkeypatch.setenv("INFERENCE_MODEL", "granite-demo")
+
+    class _Resp:
+        status_code = 200
+
+    monkeypatch.setattr(
+        prepare,
+        "run_probes",
+        lambda *args, **kwargs: [(Probe("GET", "/v1/models"), _Resp())],
+    )
     har_path = tmp_path / "chatbot-requests.har"
     assert prepare.main(["--output", str(har_path)]) == 1
     assert not har_path.exists()

@@ -25,7 +25,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 import pytest  # noqa: E402
 
-from tests.dast.har import DEFAULT_HAR_NAME, HarRecorder, run_probes  # noqa: E402
+from tests.dast.har import CONFIG_PATH, DEFAULT_HAR_NAME, HarRecorder, run_probes  # noqa: E402
 from tests.sanity.conftest import (  # noqa: E402
     BASE_URL,
     _LIGHTSPEED_STACK_CONFIG,
@@ -134,8 +134,11 @@ def main(argv=None):
             config["model"],
         )
         recorder = HarRecorder()
-        responses = run_probes(recorder, BASE_URL, config)
-        if not responses or responses[0].status_code != 200:
+        results = run_probes(recorder, BASE_URL, config)
+        config_response = next(
+            (response for probe, response in results if probe.path == CONFIG_PATH), None
+        )
+        if config_response is None or config_response.status_code != 200:
             print("GET /v1/config did not return 200 — chatbot is not ready", file=sys.stderr)
             return 1
         recorder.save(output_path, redact_values=_secret_values(env_overrides))
