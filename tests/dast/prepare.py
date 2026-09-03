@@ -111,6 +111,7 @@ def main(argv=None):
         ready_path = Path(args.ready_file)
         if not ready_path.is_absolute():
             ready_path = _REPO_ROOT / ready_path
+        ready_path.unlink(missing_ok=True)
 
         process, runtime, name, env_file_path = _start_sanity_server(
             run_config,
