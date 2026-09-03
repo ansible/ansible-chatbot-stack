@@ -32,7 +32,7 @@ endif
 
 
 
-.PHONY: help setup setup-test setup-sanity-test-data build build-custom run clean all deploy-k8s shell tag-and-push test update-lock test-sanity-byok test-sanity-mcp
+.PHONY: help setup setup-test setup-sanity-test-data build build-custom run clean all deploy-k8s shell tag-and-push test update-lock test-sanity-byok test-sanity-mcp test-dast-har
 
 .EXPORT_ALL_VARIABLES:
 
@@ -69,6 +69,7 @@ help:
 	@echo "  test-sanity-byok    - Run BYOK sanity tests (requires inference provider env vars)"
 	@echo "  test-sanity-mcp     - Run MCP sanity tests (requires inference provider env vars + MCP images)"
 	@echo "                        Set MCP_DEBUG=1 to print tool-filter before/after counts"
+	@echo "  test-dast-har      - Start granite chatbot and write chatbot-requests.har for RapiDAST"
 	@echo ""
 	@echo "Required Environment variables:"
 	@echo "  ANSIBLE_CHATBOT_VERSION                - Version tag for the image (default: $(ANSIBLE_CHATBOT_VERSION))"
@@ -326,3 +327,7 @@ test-sanity-byok:
 test-sanity-mcp:
 	@echo "Running MCP sanity tests (requires inference provider env vars + MCP images)..."
 	uv run --frozen --group test pytest tests/sanity/ -v -m mcp $(if $(filter 1 true yes,$(MCP_DEBUG)),--mcp-debug -s,)
+
+test-dast-har:
+	@echo "Starting granite chatbot and generating DAST HAR (requires VLLM_URL, VLLM_API_TOKEN, INFERENCE_MODEL)..."
+	uv run --frozen --group test python tests/dast/prepare.py --output chatbot-requests.har

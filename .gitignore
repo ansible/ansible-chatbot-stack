@@ -188,5 +188,11 @@ trace_store.db
 # sanity test fixtures, isolated from the dev copies above
 /.test_data/
 
+# DAST / RapiDAST local artifacts
+/chatbot-requests.har
+/dast-target.ready
+/dast-prepare.log
+/results/
+
 # ignor building files
 requirements.txt
