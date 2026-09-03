@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import base64
 import json
+import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -236,13 +237,16 @@ def run_probes(recorder, base_url, provider_config):
     responses = []
     for probe in granite_probes(provider_config):
         url = f"{base_url.rstrip('/')}{probe.path}"
-        responses.append(
-            recorder.request(
-                probe.method,
-                url,
-                json_body=probe.json_body,
-                stream=probe.stream,
-                timeout=probe.timeout,
+        try:
+            responses.append(
+                recorder.request(
+                    probe.method,
+                    url,
+                    json_body=probe.json_body,
+                    stream=probe.stream,
+                    timeout=probe.timeout,
+                )
             )
-        )
+        except requests.RequestException as exc:
+            print(f"probe {probe.method} {probe.path} failed: {exc}", file=sys.stderr)
     return responses
