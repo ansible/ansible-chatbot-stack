@@ -20,6 +20,8 @@ import requests
 
 
 DEFAULT_HAR_NAME = "chatbot-requests.har"
+QUERY_PATH = "/v1/query"
+JSON_MIME = "application/json"
 
 
 @dataclass(frozen=True)
@@ -43,10 +45,10 @@ def granite_probes(provider_config):
     return [
         Probe("GET", "/v1/config"),
         Probe("GET", "/v1/models"),
-        Probe("POST", "/v1/query", json_body=query, timeout=120),
+        Probe("POST", QUERY_PATH, json_body=query, timeout=120),
         Probe("POST", "/v1/streaming_query", json_body=query, stream=True, timeout=120),
-        Probe("POST", "/v1/query", json_body=empty_query, timeout=120),
-        Probe("POST", "/v1/query", json_body=ansible_query, timeout=120),
+        Probe("POST", QUERY_PATH, json_body=empty_query, timeout=120),
+        Probe("POST", QUERY_PATH, json_body=ansible_query, timeout=120),
         Probe("GET", "/"),
         Probe("GET", "/openapi.json"),
         Probe("GET", "/v1/info"),
@@ -107,10 +109,10 @@ class HarRecorder:
         duration_ms,
         request_headers=None,
         request_body=b"",
-        request_mime="application/json",
+        request_mime=JSON_MIME,
         response_headers=None,
         response_body=b"",
-        response_mime="application/json",
+        response_mime=JSON_MIME,
     ):
         request_body = request_body or b""
         response_body = response_body or b""
@@ -155,10 +157,10 @@ class HarRecorder:
         if headers:
             req_headers.update(headers)
         request_body = b""
-        request_mime = "application/json"
+        request_mime = JSON_MIME
         if json_body is not None:
             request_body = json_dumps_bytes(json_body)
-            req_headers.setdefault("Content-Type", "application/json")
+            req_headers.setdefault("Content-Type", JSON_MIME)
         started = datetime.now(timezone.utc)
         t0 = time.perf_counter()
         response = requests.request(

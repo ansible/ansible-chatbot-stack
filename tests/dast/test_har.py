@@ -6,7 +6,7 @@ import threading
 
 import pytest
 
-from tests.dast.har import HarRecorder, granite_probes, json_dumps_bytes, run_probes
+from tests.dast.har import QUERY_PATH, HarRecorder, granite_probes, json_dumps_bytes, run_probes
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -48,13 +48,13 @@ def test_granite_probes_include_sanity_endpoints():
     paths = [(p.method, p.path) for p in probes]
     assert ("GET", "/v1/config") in paths
     assert ("GET", "/v1/models") in paths
-    assert ("POST", "/v1/query") in paths
+    assert ("POST", QUERY_PATH) in paths
     assert ("POST", "/v1/streaming_query") in paths
     streaming = next(p for p in probes if p.path == "/v1/streaming_query")
     assert streaming.stream is True
     assert streaming.json_body["query"] == "What is AAP?"
     assert streaming.json_body["model"] == "granite/demo"
-    queries = [p.json_body["query"] for p in probes if p.path == "/v1/query"]
+    queries = [p.json_body["query"] for p in probes if p.path == QUERY_PATH]
     assert "What is AAP?" in queries
     assert "" in queries
     assert "What is Ansible?" in queries
