@@ -188,9 +188,14 @@ jobs:
             echo "::error::RapiDAST scan step failed to run"
             exit 1
           fi
-          if ! jq -e '[.site[].alerts[] | select((.riskcode|tonumber) >= 3)] | length == 0' \
-               results/*/*/zap/zap-report.json > /dev/null; then
-            echo "::error::RapiDAST found High-risk alerts"
+          if ! compgen -G "results/*/*/zap/zap-report.json" > /dev/null; then
+            echo "::error::RapiDAST produced no report"
+            exit 1
+          fi
+          high=$(jq -s '[.[].site[].alerts[]? | select((.riskcode|tonumber) >= 3)] | length' \
+                 results/*/*/zap/zap-report.json)
+          if [ "$high" -ne 0 ]; then
+            echo "::error::RapiDAST found $high High-risk alert(s)"
             exit 1
           fi
 
