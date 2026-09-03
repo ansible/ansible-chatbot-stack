@@ -288,6 +288,34 @@ Provider credentials are stored as repository secrets with a `SANITY_` prefix:
 Providers whose secrets are absent are skipped rather than failed.
 The workflow also pulls the MCP server images; MCP tests skip if a pull fails.
 
+## DAST (RapiDAST)
+
+Dynamic application security testing runs as a separate GitHub Actions
+workflow (`.github/workflows/rapidast.yml`), modeled on the
+[aap-mcp-server RapidAST job](https://github.com/ansible/aap-mcp-server/blob/main/.github/workflows/rapidast.yml).
+It is triggered manually via `workflow_dispatch`.
+
+The job reuses the granite sanity-test stack (same container build, test data,
+and `tests/sanity` server fixtures). MCP servers are not started. Only Granite
+(vLLM) is required:
+
+| Secret | Purpose |
+|--------|---------|
+| `SANITY_VLLM_URL`, `SANITY_VLLM_API_TOKEN`, `SANITY_INFERENCE_MODEL` | Granite chatbot used as the scan target |
+
+`tests/dast/prepare.py` starts that chatbot, records representative API calls
+(the sanity `/v1/query` and `/v1/streaming_query` probes plus Lightspeed Stack
+GET surfaces) into `chatbot-requests.har`, then leaves the server running while
+RapiDAST/ZAP imports the HAR (`rapidast-config.yml`).
+
+Local HAR generation (requires the granite env vars, test data, and image):
+
+```shell
+    make setup-sanity-test-data
+    make build
+    make test-dast-har
+```
+
 ## AAP quality evaluations
 
 AAP Chatbot Quality evaluations available:

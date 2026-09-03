@@ -1,0 +1,214 @@
+name: RapiDAST Security Scan
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rapidast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    if: github.repository_owner == 'ansible'
+
+    env:
+      ANSIBLE_CHATBOT_VERSION: 'test'
+      CONTAINER_RUNTIME: 'podman'
+      SERVER_STARTUP_TIMEOUT: '600'
+      UV_CACHE_DIR: /tmp/.uv-cache
+      HF_HOME: /tmp/.cache/huggingface
+      VLLM_URL: ${{ secrets.SANITY_VLLM_URL }}
+      VLLM_API_TOKEN: ${{ secrets.SANITY_VLLM_API_TOKEN }}
+      INFERENCE_MODEL: ${{ secrets.SANITY_INFERENCE_MODEL }}
+
+    steps:
+      - name: Free up disk space
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # main
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Fail if granite credentials are missing
+        run: |
+          if [ -z "$VLLM_URL" ] || [ -z "$VLLM_API_TOKEN" ] || [ -z "$INFERENCE_MODEL" ]; then
+            echo "::error::Granite (vLLM) credentials are required for DAST — set SANITY_VLLM_URL, SANITY_VLLM_API_TOKEN, and SANITY_INFERENCE_MODEL"
+            exit 1
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+
+      - name: Cache uv dependencies
+        uses: actions/cache@v6
+        with:
+          path: ${{ env.UV_CACHE_DIR }}
+          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            uv-${{ runner.os }}-
+
+      - name: Cache HuggingFace models
+        uses: actions/cache@v6
+        with:
+          path: ${{ env.HF_HOME }}
+          key: hf-models-${{ runner.os }}-all-MiniLM-L6-v2
+          restore-keys: |
+            hf-models-${{ runner.os }}-
+
+      - name: Setup test data
+        run: make setup-sanity-test-data
+
+      - name: Build container image with Buildah
+        id: build-image
+        uses: redhat-actions/buildah-build@719e3c40d8af9790c23eca13f7daa339f2867034 # v3
+        with:
+          image: ansible-chatbot-stack
+          tags: test
+          containerfiles: |
+            ./Containerfile
+          build-args: |
+            ANSIBLE_CHATBOT_VERSION=test
+
+      - name: Verify container image
+        run: podman images ${{ steps.build-image.outputs.image-with-tag }}
+
+      - name: Display RapiDAST configuration
+        run: cat rapidast-config.yml
+
+      - name: Start granite chatbot and generate HAR
+        run: |
+          set -euo pipefail
+          rm -f dast-target.ready chatbot-requests.har
+          uv run --frozen --group test python tests/dast/prepare.py \
+            --output chatbot-requests.har \
+            --keep-alive \
+            --ready-file dast-target.ready > dast-prepare.log 2>&1 &
+          pid=$!
+          echo "DAST_PID=$pid" >> "$GITHUB_ENV"
+          for i in $(seq 1 150); do
+            if [ -f dast-target.ready ]; then
+              echo "Chatbot is ready and HAR file exists"
+              ls -lh chatbot-requests.har
+              echo "HAR file contains $(jq '.log.entries | length' chatbot-requests.har) HTTP request/response pairs"
+              curl -sS -o /dev/null -w "GET /v1/config -> HTTP %{http_code}\n" http://127.0.0.1:8322/v1/config
+              exit 0
+            fi
+            if ! kill -0 "$pid" 2>/dev/null; then
+              echo "DAST prepare process exited before the target was ready"
+              cat dast-prepare.log || true
+              wait "$pid" || true
+              exit 1
+            fi
+            echo "Waiting for chatbot/HAR ($((i * 10))s)..."
+            sleep 10
+          done
+          echo "Timed out waiting for chatbot/HAR"
+          cat dast-prepare.log || true
+          exit 1
+
+      - name: Create results directory
+        run: |
+          mkdir -p results
+          chmod 777 results
+
+      - name: Run RapiDAST scan
+        id: rapidast
+        continue-on-error: true
+        run: |
+          docker run --rm \
+            --network host \
+            -w /opt/rapidast/work \
+            -v "${{ github.workspace }}:/opt/rapidast/work" \
+            --entrypoint /opt/rapidast/rapidast.py \
+            quay.io/redhatproductsecurity/rapidast:latest \
+            --config /opt/rapidast/work/rapidast-config.yml
+
+          if compgen -G "results/*/*/zap/zap-report.json" > /dev/null; then
+            cat results/*/*/zap/zap-report.json
+          else
+            echo "No ZAP report found"
+            ls -R results/ || echo "No results directory"
+          fi
+
+      - name: Upload RapiDAST results
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: rapidast-results
+          path: |
+            results/
+            chatbot-requests.har
+            dast-prepare.log
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Display scan summary
+        if: always()
+        run: |
+          echo "## RapiDAST Scan Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Container Image**: ${{ steps.build-image.outputs.image-with-tag }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Provider**: Granite (vLLM)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Target**: http://127.0.0.1:8322" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f chatbot-requests.har ]; then
+            echo "- **HAR entries**: $(jq '.log.entries | length' chatbot-requests.har)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if compgen -G "results/*/*/zap/zap-report.json" > /dev/null; then
+            echo "Scan completed. Results available in artifacts." >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "### Findings by Severity" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Severity | Count | Finding |" >> "$GITHUB_STEP_SUMMARY"
+            echo "|----------|-------|---------|" >> "$GITHUB_STEP_SUMMARY"
+            jq -r '.site[0].alerts[] | "| \((.riskdesc // "Unknown") | split(" ")[0]) | 1 | \(.name) |"' \
+              results/*/*/zap/zap-report.json >> "$GITHUB_STEP_SUMMARY" || true
+          else
+            echo "⚠️ No scan results found" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Check scan results
+        if: always()
+        run: |
+          if [ "${{ steps.rapidast.outcome }}" == "failure" ]; then
+            echo "::error::RapiDAST scan step failed to run"
+            exit 1
+          fi
+          if ! compgen -G "results/*/*/zap/zap-report.json" > /dev/null; then
+            echo "::error::RapiDAST produced no report"
+            exit 1
+          fi
+          high=$(jq -s '[.[].site[].alerts[]? | select((.riskcode|tonumber) >= 3)] | length' \
+                 results/*/*/zap/zap-report.json)
+          if [ "$high" -ne 0 ]; then
+            echo "::error::RapiDAST found $high High-risk alert(s)"
+            exit 1
+          fi
+
+      - name: Cleanup
+        if: always()
+        run: |
+          if [ -n "${DAST_PID:-}" ]; then
+            pkill -TERM -P "$DAST_PID" || true
+            kill "$DAST_PID" || true
+            for _ in $(seq 1 20); do
+              kill -0 "$DAST_PID" 2>/dev/null || break
+              sleep 1
+            done
+          fi
+          podman ps -aq --filter name=ansible-chatbot-sanity-granite | xargs -r podman rm -f || true
