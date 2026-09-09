@@ -1,0 +1,14 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "packageRules": [
+    {
+      "matchPackageNames": ["mcp", "lightspeed-stack-providers", "faiss-cpu"],
+      "enabled": false
+    },
+    {
+      "matchPackageNames": ["python"],
+      "matchManagers": ["github-actions", "pyenv"],
+      "enabled": false
+    }
+  ]
+}
