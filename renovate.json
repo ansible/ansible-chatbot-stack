@@ -1,0 +1,21 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "packageRules": [
+    {
+      "description": "mcp is capped at <2 in pyproject; v2 is a breaking major that needs manual review. Cap renovate to match so it stops proposing v2 (see #362), while 1.x updates still flow.",
+      "matchPackageNames": ["mcp"],
+      "allowedVersions": "<2"
+    },
+    {
+      "description": "faiss-cpu and lightspeed-stack-providers are coupled to the runtime environment and require manual validation before upgrading (see #359, #360).",
+      "matchPackageNames": ["lightspeed-stack-providers", "faiss-cpu"],
+      "enabled": false
+    },
+    {
+      "description": "Python version bumps in GitHub Actions and .python-version require coordinated runtime changes, not auto-updates (see #358).",
+      "matchPackageNames": ["python"],
+      "matchManagers": ["github-actions", "pyenv"],
+      "enabled": false
+    }
+  ]
+}
