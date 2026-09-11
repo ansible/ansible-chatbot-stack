@@ -12,8 +12,8 @@
       "enabled": false
     },
     {
-      "description": "Python version bumps in GitHub Actions and .python-version require coordinated runtime changes, not auto-updates (see #358).",
-      "matchPackageNames": ["python"],
+      "description": "Python version bumps in GitHub Actions and .python-version require coordinated runtime changes, not auto-updates (see #358, #368).",
+      "matchDepNames": ["python"],
       "matchManagers": ["github-actions", "pyenv"],
       "enabled": false
     }
