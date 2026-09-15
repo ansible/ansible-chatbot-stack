@@ -15,7 +15,7 @@ dependencies = [
     "pillow==12.3.0", # Transient dep pinned to handle CVE (CVE-2026-59197, CVE-2026-54058, CVE-2026-54060, CVE-2026-55380, CVE-2026-55379)
     "python-dotenv>=1.2.2", # Transient dep pinned to handle CVE
     "pyasn1>=0.6.4", # Bumped for CVE-2026-59886
-    "pyjwt[crypto]==2.13.0", # Transient dep pinned to handle CVE
+    "pyjwt[crypto]==2.14.0", # Transient dep pinned to handle CVE
     "python-multipart==0.0.32", # CVE-2026-42561
     "sentence-transformers>=5.2.0",
     "transformers>=5.5.0", # Transient dep pinned to handle CVE
