@@ -75,10 +75,11 @@ RUN echo -e "\
 }\n\
 " > /.llama/distributions/ansible-chatbot/ansible-chatbot-version-info.json
 
-# Copy downloaded providers from builder
-COPY --from=builder --chown=1001:1001 /app-root/llama-stack/providers.d /.llama/providers.d
-# Also copy any pre-packaged providers from the build context
+# Copy any pre-packaged providers from the build context first
 ADD llama-stack/providers.d /.llama/providers.d
+# Providers downloaded by the builder are the source of truth: this runs last
+# so it overwrites any same-named files added from the build context above
+COPY --from=builder --chown=1001:1001 /app-root/llama-stack/providers.d /.llama/providers.d
 
 # Bootstrap
 ADD entrypoint.sh /.llama
