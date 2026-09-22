@@ -133,7 +133,7 @@ jobs:
           echo "lightspeed_status=$lightspeed_status" >> "$GITHUB_OUTPUT"
 
       - name: Run sanity tests
-        run: uv run --frozen --group test pytest tests/sanity/ -v -s --tb=long
+        run: uv run --frozen --no-build --group test pytest tests/sanity/ -v -s --tb=long
 
       - name: Upload test artifacts (on failure)
         if: failure()
