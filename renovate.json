@@ -12,6 +12,11 @@
       "enabled": false
     },
     {
+      "description": "litellm 1.92.0+ ships compiled wheels; stay on the last pure-Python release until downstream builds can handle them (see #403).",
+      "matchPackageNames": ["litellm"],
+      "allowedVersions": "<1.92.0"
+    },
+    {
       "description": "Python version bumps in GitHub Actions and .python-version require coordinated runtime changes, not auto-updates (see #358).",
       "matchPackageNames": ["python"],
       "matchManagers": ["github-actions", "pyenv"],
