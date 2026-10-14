@@ -1,7 +1,7 @@
 # Build arguments declared in the global scope.
 ARG ANSIBLE_CHATBOT_VERSION=latest
-ARG IMAGE_TAGS=image-tags-not-defined
-ARG GIT_COMMIT=git-commit-not-defined
+ARG IMAGE_TAGS
+ARG GIT_COMMIT
 
 # ======================================================
 # Transient image to construct Python venv
@@ -33,6 +33,12 @@ RUN uv pip install -r requirements.txt
 # is for reproducing/verifying the fix locally, not production use.
 COPY scripts/patch-ogx-delta-none.py ./
 RUN uv run python patch-ogx-delta-none.py
+
+# LCORE-4782: diagnostic-only patch to surface the real traceback behind
+# lightspeed-stack's generic swallowed-exception HTTP 500, so remaining
+# sanity-test 500s can be root-caused. Not a real fix, not for production.
+COPY scripts/patch-lightspeed-log-exception.py ./
+RUN uv run python patch-lightspeed-log-exception.py
 
 # Download external providers
 COPY scripts/download_agent_yaml.sh ./
