@@ -6,55 +6,58 @@ lightspeed-stack's /v1/query error handling logs failures with
 so the real traceback behind a generic HTTP 500
 ({"detail":{"response":"Internal server error", ...}}) never reaches the
 logs or the response body -- confirmed in earlier debugging of this repo.
-This searches the installed `lightspeed_stack` package for the file that
-emits that "Internal server error" message and upgrades every
-`logger.error(` call in it to `logger.exception(` so the real traceback
-shows up in server logs (captured by the sanity-test pytest run) on the
-next failure. Diagnostic/local-verification only -- not a real fix, and
-not meant to land upstream as-is.
+
+First attempt at this script looked for a file containing the literal
+"Internal server error" string and failed the build when none was found
+(that message is apparently assembled from a shared response model, not
+inline next to the logging call) -- taking the whole CI run down with it.
+This version is broader (upgrades every `logger.error(` call anywhere in
+the installed `lightspeed_stack` package, not just one guessed file) and,
+critically, NEVER fails the build -- this is a diagnostic aid, not a real
+fix, so it must not be able to block the pipeline.
+
+See https://redhat.atlassian.net/browse/LCORE-4782. Diagnostic/
+local-verification only -- not meant to land upstream as-is.
 """
 import pathlib
-import sys
 
 VENV_ROOT = pathlib.Path("/app-root/.venv")
 MARKER = "# LCORE-4782-diagnostic-patched"
-NEEDLE = "Internal server error"
-
-
-def find_targets() -> list[pathlib.Path]:
-    candidates = sorted(VENV_ROOT.glob("**/lightspeed_stack/**/*.py"))
-    return [p for p in candidates if NEEDLE in p.read_text()]
 
 
 def main() -> int:
-    targets = find_targets()
-    if not targets:
-        print(f"patch-lightspeed-log-exception: could not find any lightspeed_stack file containing {NEEDLE!r}", file=sys.stderr)
-        return 1
+    candidates = sorted(VENV_ROOT.glob("**/lightspeed_stack/**/*.py"))
+    print(f"patch-lightspeed-log-exception: scanned {len(candidates)} lightspeed_stack .py files under {VENV_ROOT}")
 
-    for target in targets:
-        text = target.read_text()
+    patched_any = False
+    for target in candidates:
+        try:
+            text = target.read_text()
+        except (OSError, UnicodeDecodeError) as exc:
+            print(f"patch-lightspeed-log-exception: skipping {target} ({exc})")
+            continue
+
+        if "logger.error(" not in text:
+            continue
         if MARKER in text:
             print(f"patch-lightspeed-log-exception: {target} already patched, skipping")
             continue
 
-        print(f"patch-lightspeed-log-exception: DIAGNOSTIC === {target} (lines mentioning {NEEDLE!r} or logger.error) ===")
-        for i, line in enumerate(text.splitlines(), start=1):
-            if NEEDLE in line or "logger.error(" in line:
-                print(f"{i}: {line}")
-        print(f"patch-lightspeed-log-exception: DIAGNOSTIC === end {target} ===")
-
         count = text.count("logger.error(")
-        if count == 0:
-            print(f"patch-lightspeed-log-exception: no logger.error( calls in {target}, nothing to upgrade")
-            continue
-
         patched = text.replace("logger.error(", "logger.exception(")
         patched = f"{MARKER}\n{patched}"
-        target.write_text(patched)
+        try:
+            target.write_text(patched)
+        except OSError as exc:
+            print(f"patch-lightspeed-log-exception: WARNING - could not write {target}: {exc}")
+            continue
+        patched_any = True
         print(f"patch-lightspeed-log-exception: upgraded {count} logger.error( call(s) to logger.exception( in {target}")
 
-    return 0
+    if not patched_any:
+        print("patch-lightspeed-log-exception: WARNING - no logger.error( calls found/patched anywhere under lightspeed_stack")
+
+    return 0  # diagnostic-only: never fail the build
 
 
 if __name__ == "__main__":
