@@ -28,6 +28,12 @@ RUN uv export --no-hashes --no-header --no-annotate --no-dev --format requiremen
 
 RUN uv pip install -r requirements.txt
 
+# LCORE-4782: local-verification patch for the OGX/llama-stack streaming
+# AttributeError on null `delta` chunks. No upstream fix merged yet; this
+# is for reproducing/verifying the fix locally, not production use.
+COPY scripts/patch-ogx-delta-none.py ./
+RUN uv run python patch-ogx-delta-none.py
+
 # Download external providers
 COPY scripts/download_agent_yaml.sh ./
 RUN bash download_agent_yaml.sh
