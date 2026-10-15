@@ -15,8 +15,6 @@ dependencies = [
     "litellm==1.91.5", # Pinned below versions with Rust deps to avoid downstream build changes (>=1.84.0 still covers CVE-2026-49468); future litellm CVE fixes will likely only land in compiled releases, so this cap may need revisiting then
     "mcp>=1.28.1,<2",
     "pillow==12.3.0", # Transient dep pinned to handle CVE (CVE-2026-59197, CVE-2026-54058, CVE-2026-54060, CVE-2026-55380, CVE-2026-55379)
-    "pydantic-ai==2.22.0", # EXPERIMENTAL (LCORE-4782/AAP-94674): base lightspeed-stack:0.6.2 image bundles 2.0.0; testing whether a newer release fixes a cancel-scope RuntimeError hit when 2+ MCP servers are registered (confirmed via CI: the error disappears with a single MCP server). pydantic-ai#2818/PR #4514 (merged before 2.0.0's release) fixed a related-but-different concurrent-single-server-access cancel-scope bug, so this may not help -- revert if it doesn't.
-    "pydantic-graph==2.22.0", # Pinned alongside pydantic-ai -- the two are versioned and released together.
     "python-dotenv>=1.2.2", # Transient dep pinned to handle CVE
     "pyasn1>=0.6.4", # Bumped for CVE-2026-59886
     "pyjwt[crypto]==2.15.1", # Transient dep pinned to handle CVE
