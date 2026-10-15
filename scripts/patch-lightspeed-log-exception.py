@@ -1,51 +1,51 @@
 #!/usr/bin/env python3
 """Diagnostic-only patch for debugging LCORE-4782 sanity-test 500s.
 
-ROOT CAUSE LOCATED (2026-10-15, after 8 CI cycles): the previous iteration
-marked every `InternalServerErrorResponse.generic()` call site across
-/app-root/src uniquely. Run 38734008481 confirmed the real one:
-utils/agents/query.py:101, inside `map_agent_inference_error`:
+REAL EXCEPTION IDENTIFIED (2026-10-15, run 38737369532): the previous
+iteration (commit c72e07e) embedded `type(exc).__name__`/`str(exc)!r` into
+the response body at the confirmed swallow point, utils/agents/query.py:101
+inside `map_agent_inference_error`'s `case _:` fallback. Every failing test
+in that run showed:
 
-    AgentInferenceError: TypeAlias = (
-        AgentRunError | APIStatusError | APIConnectionError | RuntimeError
-    )
+    type=RuntimeError
+    message="Attempted to exit a cancel scope that isn't the current
+             tasks's current cancel scope"
 
-    def map_agent_inference_error(
-        exc: AgentInferenceError,
-        model_id: str,
-    ) -> AbstractErrorResponse:
-        match exc:
-            case AgentRunError() as agent_exc:
-                return map_pydantic_agent_run_error(agent_exc, model_id)
-            case APIStatusError() as status_exc:
-                return handle_known_apistatus_errors(status_exc, model_id)
-            case APIConnectionError() as connection_exc:
-                return ServiceUnavailableResponse(
-                    backend_name="Llama Stack", cause=str(connection_exc)
-                )
-            case RuntimeError() as runtime_exc if is_context_length_error(str(runtime_exc)):
-                return PromptTooLongResponse(model=model_id)
-            case _:
-                return InternalServerErrorResponse.generic()   # <-- the real swallow point
+This is the exact cancel-scope RuntimeError previously tracked separately
+as Jira AAP-94674 (lightspeed-stack's teardown.py during agent.iter(prompt)
+teardown) -- which earlier in this investigation was *thought* to be
+superseded by the LCORE-4782 OGX null-delta fix (the cancel-scope noise
+seen back then was attributed to a secondary sqlalchemy connection-pool
+cleanup cancellation). That conclusion is now shown to be wrong, or at
+least incomplete: this RuntimeError is a genuine, separate failure mode
+that surfaces specifically in MCP tool-calling-heavy tests
+(test_tool_filtering_lightspeed_query, test_realistic_tool_lists_trigger_filtering,
+test_knowledge_search_always_included), and it is NOT a context-length
+error, so `map_agent_inference_error` has nothing better to do with it
+than fall through to `InternalServerErrorResponse.generic()`.
 
-Since AgentInferenceError only has 4 members and 3 are handled explicitly,
-the ONLY way to reach `case _:` is: `exc` is a `RuntimeError` that does
-NOT match `is_context_length_error(str(exc))` -- i.e. some other plain
-RuntimeError is being raised during these MCP tool-calling tests, and
-nothing recognizes it. This was confirmed live via the "response" field
-flipping to query_failed()'s hardcoded "Error while processing query"
-value and the embedded "[LCORE-4782-GENERIC path=utils/agents/query.py
-line=101]" marker appearing in every failing test body.
+This classic anyio `RuntimeError` fires when a `CancelScope.__exit__` runs
+in a different asyncio Task than the one that opened it (`self._host_task
+is not current_task()`). The most common trigger is something driving an
+anyio-based coroutine (e.g. an MCP client session, which uses anyio
+internally for request/timeout handling) via `asyncio.wait_for`/
+`asyncio.timeout`, which spawns a *new* Task to run the wrapped coroutine --
+if that coroutine (or something it calls into) opened a CancelScope
+expecting to control its own task lifecycle, exiting it from the wrapper's
+task raises exactly this error.
 
-This patch reveals the real exception's type and message by embedding
-them directly in the response body (the one channel proven reliable
-throughout this entire investigation -- see the long history in
-/sandbox/.claude/projects/-sandbox-ansible-chatbot-stack/memory/
-project_llama_stack_0_6_upgrade.md for the 7 failed side-channel attempts
-that preceded this).
+We don't yet know the exact call site (lightspeed-stack's own teardown.py,
+pydantic-ai's MCP toolset wrapper, or the `mcp` client SDK itself). This
+patch captures the FULL traceback (via `traceback.format_exception`, using
+`exc.__traceback__`, since `exc` here is the already-caught exception
+instance) and embeds it in the response body -- the one diagnostic channel
+proven reliable throughout this entire investigation (see the long history
+in /sandbox/.claude/projects/-sandbox-ansible-chatbot-stack/memory/
+project_llama_stack_0_6_upgrade.md).
 
-See https://redhat.atlassian.net/browse/LCORE-4782. Diagnostic/
-local-verification only -- not meant to land upstream as-is.
+See https://redhat.atlassian.net/browse/LCORE-4782 and the related
+https://redhat.atlassian.net/browse/AAP-94674. Diagnostic/local-verification
+only -- not meant to land upstream as-is.
 """
 import pathlib
 
@@ -56,15 +56,21 @@ OLD = (
     "        case RuntimeError() as runtime_exc if is_context_length_error(str(runtime_exc)):\n"
     "            return PromptTooLongResponse(model=model_id)\n"
     "        case _:\n"
-    "            return InternalServerErrorResponse.generic()\n"
+    "            return InternalServerErrorResponse.query_failed(\n"
+    '                f"[LCORE-4782-REALCAUSE type={type(exc).__name__} message={str(exc)!r}] "\n'
+    '                "An unexpected error occurred while processing the request."\n'
+    "            )\n"
 )
 NEW = (
     "        case RuntimeError() as runtime_exc if is_context_length_error(str(runtime_exc)):\n"
     "            return PromptTooLongResponse(model=model_id)\n"
     "        case _:\n"
+    "            import traceback as _lcore4782_traceback\n"
+    "            _lcore4782_tb = \"\".join(\n"
+    "                _lcore4782_traceback.format_exception(type(exc), exc, exc.__traceback__)\n"
+    "            )\n"
     "            return InternalServerErrorResponse.query_failed(\n"
-    '                f"[LCORE-4782-REALCAUSE type={type(exc).__name__} message={str(exc)!r}] "\n'
-    '                "An unexpected error occurred while processing the request."\n'
+    '                f"[LCORE-4782-TRACEBACK] {_lcore4782_tb}"\n'
     "            )\n"
 )
 
@@ -74,7 +80,7 @@ def patch_map_agent_inference_error() -> None:
         print(f"patch-lightspeed-log-exception: DIAGNOSTIC - {TARGET} does not exist")
         return
     text = TARGET.read_text()
-    if "LCORE-4782-REALCAUSE" in text:
+    if "LCORE-4782-TRACEBACK" in text:
         print(f"patch-lightspeed-log-exception: {TARGET} already patched, skipping")
         return
     count = text.count(OLD)
@@ -86,7 +92,7 @@ def patch_map_agent_inference_error() -> None:
         return
     text = text.replace(OLD, NEW, 1)
     TARGET.write_text(text)
-    print(f"patch-lightspeed-log-exception: embedded real exception type/message into map_agent_inference_error's fallback in {TARGET}")
+    print(f"patch-lightspeed-log-exception: embedded full traceback into map_agent_inference_error's fallback in {TARGET}")
 
 
 def main() -> int:
