@@ -8,56 +8,33 @@ the response body -- confirmed in earlier debugging of this repo.
 
 Earlier attempts assumed `lightspeed_stack` lives under
 /app-root/.venv/lib/python3.12/site-packages/ like a normal pip-installed
-package. A broad scan found ZERO files there, so the app must be laid out
-differently in this base image (likely copied in as source rather than
-pip-installed, or under a different venv/site-packages path). This version
-searches all of /app-root first to find where `lightspeed_stack` (or
-`query.py` / an `endpoints` dir, per prior debugging) actually lives, prints
-what it finds, and only then attempts the logger.error -> logger.exception
-upgrade on whatever .py files it locates. NEVER fails the build -- this is
-a diagnostic aid, not a real fix.
+package, or is importable as a `lightspeed_stack` package at all. A broad
+scan of /app-root found the real layout: the app is plain source (not
+pip-installed) directly under /app-root/src/ -- e.g.
+/app-root/src/app/endpoints/query.py, /app-root/src/utils/agents/query.py,
+/app-root/src/utils/query.py -- with no `lightspeed_stack` package name
+anywhere in the path. This version targets /app-root/src directly. NEVER
+fails the build -- this is a diagnostic aid, not a real fix.
 
 See https://redhat.atlassian.net/browse/LCORE-4782. Diagnostic/
 local-verification only -- not meant to land upstream as-is.
 """
 import pathlib
 
-APP_ROOT = pathlib.Path("/app-root")
+APP_SRC = pathlib.Path("/app-root/src")
 MARKER = "# LCORE-4782-diagnostic-patched"
 
 
 def main() -> int:
     try:
-        all_py_files = list(APP_ROOT.rglob("*.py"))
+        candidates = list(APP_SRC.rglob("*.py"))
     except OSError as exc:
-        print(f"patch-lightspeed-log-exception: WARNING - could not walk {APP_ROOT}: {exc}")
+        print(f"patch-lightspeed-log-exception: WARNING - could not walk {APP_SRC}: {exc}")
         return 0
 
-    print(f"patch-lightspeed-log-exception: scanned {len(all_py_files)} total .py files under {APP_ROOT}")
-
-    lightspeed_dirs = sorted({p.parent for p in all_py_files if "lightspeed_stack" in p.parts})
-    print(f"patch-lightspeed-log-exception: DIAGNOSTIC - directories on a 'lightspeed_stack' path: {[str(d) for d in lightspeed_dirs[:40]]}")
-
-    query_files = sorted(p for p in all_py_files if p.name == "query.py")
-    print(f"patch-lightspeed-log-exception: DIAGNOSTIC - files named query.py: {[str(p) for p in query_files]}")
-
-    endpoints_files = sorted(p for p in all_py_files if "endpoints" in p.parts)
-    print(f"patch-lightspeed-log-exception: DIAGNOSTIC - files under an 'endpoints' dir: {[str(p) for p in endpoints_files[:40]]}")
-
-    unexpected_error_files = []
-    for p in all_py_files:
-        try:
-            if "unexpected error" in p.read_text().lower():
-                unexpected_error_files.append(p)
-        except (OSError, UnicodeDecodeError):
-            continue
-        if len(unexpected_error_files) >= 20:
-            break
-    print(f"patch-lightspeed-log-exception: DIAGNOSTIC - files mentioning 'unexpected error' (case-insensitive, first 20): {[str(p) for p in unexpected_error_files]}")
-
-    candidates = [p for p in all_py_files if "lightspeed_stack" in p.parts]
+    print(f"patch-lightspeed-log-exception: scanned {len(candidates)} .py files under {APP_SRC}")
     if not candidates:
-        print("patch-lightspeed-log-exception: WARNING - no .py files on a lightspeed_stack path found anywhere under /app-root; skipping patch")
+        print(f"patch-lightspeed-log-exception: WARNING - {APP_SRC} doesn't exist or is empty; skipping patch")
         return 0
 
     patched_any = False
@@ -86,7 +63,7 @@ def main() -> int:
         print(f"patch-lightspeed-log-exception: upgraded {count} logger.error( call(s) to logger.exception( in {target}")
 
     if not patched_any:
-        print("patch-lightspeed-log-exception: WARNING - found lightspeed_stack .py files but no logger.error( calls to upgrade")
+        print(f"patch-lightspeed-log-exception: WARNING - scanned {APP_SRC} but found no logger.error( calls to upgrade")
 
     return 0  # diagnostic-only: never fail the build
 
