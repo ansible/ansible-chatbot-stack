@@ -120,10 +120,14 @@ registered_resources:
       provider_id: model-context-protocol
       mcp_endpoint:
         uri: http://localhost:8004/sse
-    - toolgroup_id: mcp::aap-lightspeed
-      provider_id: model-context-protocol
-      mcp_endpoint:
-        uri: http://localhost:8005/sse
+    # TEMPORARY EXPERIMENT (LCORE-4782/AAP-94674): mcp::aap-lightspeed removed
+    # here too -- this llama-stack-level tool_groups list is what actually
+    # determines how many MCP servers get connected/torn down, independent
+    # of mcp-lightspeed-stack.yaml's mcp_servers list. Revert once done.
+    # - toolgroup_id: mcp::aap-lightspeed
+    #   provider_id: model-context-protocol
+    #   mcp_endpoint:
+    #     uri: http://localhost:8005/sse
   safety:
     - default_shield_id: llama-guard
 vector_stores:
