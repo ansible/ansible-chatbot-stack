@@ -39,6 +39,36 @@ FALLBACK_LOG = (
 )
 
 
+def find_all_generic_error_usages() -> None:
+    """The targeted patch on utils/query.py's fallback never fired, so the
+    real 500 for the 2 persistent failures comes from a different call
+    site entirely. Find every place InternalServerErrorResponse is
+    referenced anywhere in the app source, with context, instead of
+    guessing again."""
+    try:
+        files = list(APP_SRC.rglob("*.py"))
+    except OSError as exc:
+        print(f"patch-lightspeed-log-exception: WARNING - could not walk {APP_SRC} for usage search: {exc}")
+        return
+
+    hits = 0
+    for path in files:
+        try:
+            lines = path.read_text().splitlines()
+        except (OSError, UnicodeDecodeError):
+            continue
+        for i, line in enumerate(lines):
+            if "InternalServerErrorResponse" in line:
+                hits += 1
+                start = max(0, i - 3)
+                end = min(len(lines), i + 4)
+                print(f"patch-lightspeed-log-exception: DIAGNOSTIC - {path}:{i + 1} context:")
+                for j in range(start, end):
+                    marker = ">>" if j == i else "  "
+                    print(f"{marker} {j + 1}: {lines[j]}")
+    print(f"patch-lightspeed-log-exception: DIAGNOSTIC - found {hits} InternalServerErrorResponse reference(s) total under {APP_SRC}")
+
+
 def patch_fallback_logging() -> None:
     if not FALLBACK_FILE.exists():
         print(f"patch-lightspeed-log-exception: DIAGNOSTIC - {FALLBACK_FILE} does not exist")
@@ -60,6 +90,7 @@ def patch_fallback_logging() -> None:
 
 
 def main() -> int:
+    find_all_generic_error_usages()
     patch_fallback_logging()
 
     try:
