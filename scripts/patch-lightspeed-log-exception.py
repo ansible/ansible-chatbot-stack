@@ -56,10 +56,7 @@ OLD = (
     "        case RuntimeError() as runtime_exc if is_context_length_error(str(runtime_exc)):\n"
     "            return PromptTooLongResponse(model=model_id)\n"
     "        case _:\n"
-    "            return InternalServerErrorResponse.query_failed(\n"
-    '                f"[LCORE-4782-REALCAUSE type={type(exc).__name__} message={str(exc)!r}] "\n'
-    '                "An unexpected error occurred while processing the request."\n'
-    "            )\n"
+    "            return InternalServerErrorResponse.generic()\n"
 )
 NEW = (
     "        case RuntimeError() as runtime_exc if is_context_length_error(str(runtime_exc)):\n"
