@@ -43,17 +43,38 @@ show up fine in the same run, so the logging plumbing itself isn't broken
 globally -- something specific to this module's `get_logger(__name__)`
 instance (naming/handler/level config) is swallowing it silently.
 
-This iteration bypasses the logging framework entirely: writes straight to
-`sys.stderr` (via a local `import sys`, since the file doesn't import it at
-module level) with an explicit `.flush()`. This is the same raw stream
-every other log line in these runs travels over, so it sidesteps both the
-print()-buffering theory and the logger-config theory at once.
+Run 38676587067 showed a RAW `sys.stderr.write()` + `.flush()` (bypassing
+the logging framework entirely) ALSO never appeared, despite byte-identical
+failure bodies every single run. Three independent output mechanisms all
+producing nothing, with an unchanged failure signature every time, is
+suspicious enough to stop guessing at *why output disappears* and instead
+test *whether this file is even the one executing*. entrypoint.sh runs
+`$PYTHON /app-root/src/lightspeed_stack.py` directly (confirmed by reading
+it locally in this repo), which should put /app-root/src at the front of
+sys.path and make our edits authoritative -- but we've never actually
+proven that assumption.
 
-This also logs at the actual branch point (`response.finish_reason is
-None`) with the real variable names (`raw_finish_reason`,
-`response.provider_details`) instead of a blind `locals()` dump, to find
-out WHY pydantic-ai's ModelResponse.finish_reason comes back None for
-these two MCP-tool-heavy tests specifically.
+So: replace the quiet `return AgentFinishReason.ERROR` with a loud,
+distinctive `raise AssertionError(...)` instead. This is a definitive
+test, not another logging attempt:
+  - If this file IS what's running, the failure signature MUST change --
+    an AssertionError isn't caught by app/endpoints/query.py's 3 specific
+    except clauses (RuntimeError, APIConnectionError, LLSApiStatusError/
+    OpenAIAPIStatusError), so it will propagate to the global ASGI
+    exception middleware in app/main.py, which does
+    `logger.exception("Uncaught exception in endpoint: %s", exc)` --
+    a message that has NEVER appeared in any run so far. Seeing it for
+    the first time, or seeing a differently-shaped 500 body, proves the
+    patch is live and the exception message will hand us
+    raw_finish_reason/provider_details directly.
+  - If the response body stays byte-identical to every prior run despite
+    this change, that's proof this patched file is NOT what the running
+    container executes -- the real swallow point is coming from somewhere
+    else entirely (a different installed copy of this module, or a
+    completely different code path that happens to produce the same
+    wording), and the next step is to find where the app's lightspeed-stack
+    package is actually imported from at runtime, not to keep patching
+    /app-root/src blind.
 
 Suspected cause worth cross-checking once real data is in hand: the
 LCORE-4782 OGX fix itself (scripts/patch-ogx-delta-none.py) inserts
@@ -83,14 +104,11 @@ OLD = (
 )
 NEW = (
     "    if response.finish_reason is None:\n"
-    "        import sys as _lcore4782_sys\n"
-    "        _lcore4782_sys.stderr.write(\n"
-    '            "LCORE-4782 diagnostic: finish_reason is None - '
-    'raw_finish_reason=%r provider_details=%r response=%r\\n"\n'
-    "            % (raw_finish_reason, response.provider_details, response)\n"
+    '        raise AssertionError(\n'
+    '            "LCORE-4782-MARKER: finish_reason is None - '
+    'raw_finish_reason=%r provider_details=%r"\n'
+    "            % (raw_finish_reason, response.provider_details)\n"
     "        )\n"
-    "        _lcore4782_sys.stderr.flush()\n"
-    "        return AgentFinishReason.ERROR\n"
 )
 
 
@@ -111,7 +129,7 @@ def patch_finish_reason_none_branch() -> None:
         return
     patched = text.replace(OLD, NEW, 1)
     TARGET.write_text(patched)
-    print(f"patch-lightspeed-log-exception: inserted sys.stderr.write diagnostic in the finish_reason-is-None branch of {TARGET}")
+    print(f"patch-lightspeed-log-exception: inserted raise AssertionError('LCORE-4782-MARKER...') in the finish_reason-is-None branch of {TARGET}")
 
 
 def main() -> int:
