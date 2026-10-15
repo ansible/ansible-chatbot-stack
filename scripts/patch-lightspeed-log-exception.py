@@ -1,114 +1,96 @@
 #!/usr/bin/env python3
 """Diagnostic-only patch for debugging LCORE-4782 sanity-test 500s.
 
-BREAKTHROUGH (2026-10-15, after 7 failed CI cycles patching the wrong
-function): reading the full implementation of
-models/api/responses/error/internal.py (run 38730747586) showed:
+ROOT CAUSE LOCATED (2026-10-15, after 8 CI cycles): the previous iteration
+marked every `InternalServerErrorResponse.generic()` call site across
+/app-root/src uniquely. Run 38734008481 confirmed the real one:
+utils/agents/query.py:101, inside `map_agent_inference_error`:
 
-    @classmethod
-    def generic(cls) -> Self:
-        return cls(
-            response="Internal server error",
-            cause="An unexpected error occurred while processing the request.",
-        )
+    AgentInferenceError: TypeAlias = (
+        AgentRunError | APIStatusError | APIConnectionError | RuntimeError
+    )
 
-    @classmethod
-    def query_failed(cls, cause: str) -> Self:
-        return cls(
-            response="Error while processing query",
-            cause=cause,
-        )
+    def map_agent_inference_error(
+        exc: AgentInferenceError,
+        model_id: str,
+    ) -> AbstractErrorResponse:
+        match exc:
+            case AgentRunError() as agent_exc:
+                return map_pydantic_agent_run_error(agent_exc, model_id)
+            case APIStatusError() as status_exc:
+                return handle_known_apistatus_errors(status_exc, model_id)
+            case APIConnectionError() as connection_exc:
+                return ServiceUnavailableResponse(
+                    backend_name="Llama Stack", cause=str(connection_exc)
+                )
+            case RuntimeError() as runtime_exc if is_context_length_error(str(runtime_exc)):
+                return PromptTooLongResponse(model=model_id)
+            case _:
+                return InternalServerErrorResponse.generic()   # <-- the real swallow point
 
-Every single observed failure body has been
-`{"detail":{"response":"Internal server error","cause":"An unexpected
-error occurred while processing the request."}}` -- note the "response"
-field is "Internal server error", which is `generic()`'s hardcoded value,
-NOT `query_failed()`'s ("Error while processing query"). We spent 5+ CI
-cycles patching `get_finish_reason_error`'s `case _:` fallback in
-utils/agents/query.py, which calls `query_failed(...)` -- a call site
-that, if actually hit, would have produced a DIFFERENT "response" field
-value we never saw even once. That whole code path was a red herring: the
-`cause` text matched by coincidence (or shared wording convention) while
-the `response` field -- which we never cross-checked -- did not. This
-also retroactively explains why none of 5 separate diagnostics (print,
-logger.error, raw stderr write, raise AssertionError, embedded response
-text) ever had any effect: that line is never reached for these failures.
+Since AgentInferenceError only has 4 members and 3 are handled explicitly,
+the ONLY way to reach `case _:` is: `exc` is a `RuntimeError` that does
+NOT match `is_context_length_error(str(exc))` -- i.e. some other plain
+RuntimeError is being raised during these MCP tool-calling tests, and
+nothing recognizes it. This was confirmed live via the "response" field
+flipping to query_failed()'s hardcoded "Error while processing query"
+value and the embedded "[LCORE-4782-GENERIC path=utils/agents/query.py
+line=101]" marker appearing in every failing test body.
 
-The real swallow point calls `InternalServerErrorResponse.generic()`
-somewhere else. At least two known call sites exist (utils/query.py's
-`handle_known_apistatus_errors` fallback -- previously "ruled out" via an
-unreliable logger.error diagnostic we now know can't be trusted in this
-codebase; and another function in utils/agents/query.py itself). Rather
-than guess which one, this patch finds and marks EVERY
-`return InternalServerErrorResponse.generic()` call site across the whole
-/app-root/src tree, replacing each with a uniquely-identifiable
-`query_failed(f"[LCORE-4782-GENERIC path=... line=...] ...")` call. Since
-query_failed's "response" field differs from generic()'s, simply seeing
-the "response" field flip to "Error while processing query" in the next
-failing test's body will CONFIRM this diagnosis, and the embedded
-path/line will show exactly which call site fired -- no more guessing.
+This patch reveals the real exception's type and message by embedding
+them directly in the response body (the one channel proven reliable
+throughout this entire investigation -- see the long history in
+/sandbox/.claude/projects/-sandbox-ansible-chatbot-stack/memory/
+project_llama_stack_0_6_upgrade.md for the 7 failed side-channel attempts
+that preceded this).
 
 See https://redhat.atlassian.net/browse/LCORE-4782. Diagnostic/
 local-verification only -- not meant to land upstream as-is.
 """
 import pathlib
-import re
 
 APP_SRC = pathlib.Path("/app-root/src")
-PATTERN = re.compile(r"^(?P<indent>[ \t]*)return InternalServerErrorResponse\.generic\(\)[ \t]*$")
-MARKER = "LCORE-4782-GENERIC"
+TARGET = APP_SRC / "utils" / "agents" / "query.py"
+
+OLD = (
+    "        case RuntimeError() as runtime_exc if is_context_length_error(str(runtime_exc)):\n"
+    "            return PromptTooLongResponse(model=model_id)\n"
+    "        case _:\n"
+    "            return InternalServerErrorResponse.generic()\n"
+)
+NEW = (
+    "        case RuntimeError() as runtime_exc if is_context_length_error(str(runtime_exc)):\n"
+    "            return PromptTooLongResponse(model=model_id)\n"
+    "        case _:\n"
+    "            return InternalServerErrorResponse.query_failed(\n"
+    '                f"[LCORE-4782-REALCAUSE type={type(exc).__name__} message={str(exc)!r}] "\n'
+    '                "An unexpected error occurred while processing the request."\n'
+    "            )\n"
+)
 
 
-def patch_generic_call_sites() -> None:
-    try:
-        files = sorted(APP_SRC.rglob("*.py"))
-    except OSError as exc:
-        print(f"patch-lightspeed-log-exception: WARNING - could not walk {APP_SRC}: {exc}")
+def patch_map_agent_inference_error() -> None:
+    if not TARGET.exists():
+        print(f"patch-lightspeed-log-exception: DIAGNOSTIC - {TARGET} does not exist")
         return
-
-    total_patched = 0
-    for path in files:
-        try:
-            text = path.read_text()
-        except (OSError, UnicodeDecodeError):
-            continue
-        if "InternalServerErrorResponse.generic()" not in text:
-            continue
-        if MARKER in text:
-            print(f"patch-lightspeed-log-exception: {path} already patched, skipping")
-            continue
-
-        lines = text.splitlines(keepends=True)
-        changed = False
-        rel = path.relative_to(APP_SRC)
-        for i, line in enumerate(lines):
-            match = PATTERN.match(line.rstrip("\n"))
-            if not match:
-                continue
-            indent = match.group("indent")
-            lineno = i + 1
-            new_line = (
-                f'{indent}return InternalServerErrorResponse.query_failed(\n'
-                f'{indent}    f"[{MARKER} path={rel} line={lineno}] "\n'
-                f'{indent}    "An unexpected error occurred while processing the request."\n'
-                f"{indent})\n"
-            )
-            lines[i] = new_line
-            changed = True
-            total_patched += 1
-            print(f"patch-lightspeed-log-exception: marked generic() call site at {rel}:{lineno}")
-
-        if changed:
-            path.write_text("".join(lines))
-
-    if total_patched == 0:
-        print("patch-lightspeed-log-exception: WARNING - found no InternalServerErrorResponse.generic() call sites to mark")
-    else:
-        print(f"patch-lightspeed-log-exception: marked {total_patched} generic() call site(s) total")
+    text = TARGET.read_text()
+    if "LCORE-4782-REALCAUSE" in text:
+        print(f"patch-lightspeed-log-exception: {TARGET} already patched, skipping")
+        return
+    count = text.count(OLD)
+    if count != 1:
+        print(
+            f"patch-lightspeed-log-exception: WARNING - expected exactly 1 occurrence of the "
+            f"map_agent_inference_error fallback block in {TARGET}, found {count}; aborting"
+        )
+        return
+    text = text.replace(OLD, NEW, 1)
+    TARGET.write_text(text)
+    print(f"patch-lightspeed-log-exception: embedded real exception type/message into map_agent_inference_error's fallback in {TARGET}")
 
 
 def main() -> int:
-    patch_generic_call_sites()
+    patch_map_agent_inference_error()
     return 0  # diagnostic-only: never fail the build
 
 
