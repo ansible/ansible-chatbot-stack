@@ -33,11 +33,14 @@ MARKER = "# LCORE-4782-diagnostic-patched"
 # helpers common to every endpoint (where a catch-all exception wrapper
 # would live).
 DUMP_FILES = [
-    "utils/endpoints.py",
-    "app/main.py",
-    "app/endpoints/query.py",
+    # utils/query.py:handle_known_apistatus_errors (past line 400, cut off
+    # last run) looks like the real culprit -- converts LLSApiStatusError/
+    # OpenAIAPIStatusError into structured responses, likely falling back
+    # to InternalServerErrorResponse for unrecognized status codes, with
+    # no logging call on that fallback path (hence why upgrading
+    # logger.error calls elsewhere found nothing).
     "utils/query.py",
-    "utils/agents/query.py",
+    "models/api/responses/error.py",
 ]
 
 
@@ -48,7 +51,7 @@ def dump_file(rel_path: str) -> None:
         return
     lines = path.read_text().splitlines()
     print(f"patch-lightspeed-log-exception: DIAGNOSTIC === BEGIN {path} ({len(lines)} lines) ===")
-    for i, line in enumerate(lines[:400], start=1):
+    for i, line in enumerate(lines[:1000], start=1):
         print(f"{i}: {line}")
     print(f"patch-lightspeed-log-exception: DIAGNOSTIC === END {path} ===")
 
