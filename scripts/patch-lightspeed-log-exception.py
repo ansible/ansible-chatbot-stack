@@ -33,13 +33,21 @@ A prior iteration tried `print(locals())` right before that fallback to see
 which AgentFinishReason value falls through, but it never showed up in CI
 logs even though the code path is 100% confirmed to run (the literal cause
 string is unique to this one line in the whole /app-root/src tree, and it's
-in every failing response body). Root cause of THAT: the agent server is a
-long-lived subprocess with stdout piped (not a TTY), so bare print() is
-block-buffered and can be lost before the buffer flushes. Fixed here by
-using the module's own `logger` (already defined: `logger = get_logger(
-__name__)` at line 54) instead of print() -- logging.StreamHandler flushes
-on every emit, which is exactly why all the real INFO/WARNING log lines
-*did* show up fine in every run.
+in every failing response body). Hypothesis at the time: bare print() is
+block-buffered on a long-lived subprocess's piped stdout. Fixed by switching
+to the module's own `logger.error(...)` (logging.StreamHandler flushes on
+every emit) -- but run 38674481534 showed THAT didn't appear either, even
+though 5 failures that run all carried the exact cause string again. Other
+loggers' ERROR-level lines (e.g. `llama_stack.core.request_headers`) DID
+show up fine in the same run, so the logging plumbing itself isn't broken
+globally -- something specific to this module's `get_logger(__name__)`
+instance (naming/handler/level config) is swallowing it silently.
+
+This iteration bypasses the logging framework entirely: writes straight to
+`sys.stderr` (via a local `import sys`, since the file doesn't import it at
+module level) with an explicit `.flush()`. This is the same raw stream
+every other log line in these runs travels over, so it sidesteps both the
+print()-buffering theory and the logger-config theory at once.
 
 This also logs at the actual branch point (`response.finish_reason is
 None`) with the real variable names (`raw_finish_reason`,
@@ -75,13 +83,13 @@ OLD = (
 )
 NEW = (
     "    if response.finish_reason is None:\n"
-    '        logger.error(\n'
+    "        import sys as _lcore4782_sys\n"
+    "        _lcore4782_sys.stderr.write(\n"
     '            "LCORE-4782 diagnostic: finish_reason is None - '
-    'raw_finish_reason=%r provider_details=%r response=%r",\n'
-    "            raw_finish_reason,\n"
-    "            response.provider_details,\n"
-    "            response,\n"
+    'raw_finish_reason=%r provider_details=%r response=%r\\n"\n'
+    "            % (raw_finish_reason, response.provider_details, response)\n"
     "        )\n"
+    "        _lcore4782_sys.stderr.flush()\n"
     "        return AgentFinishReason.ERROR\n"
 )
 
@@ -103,7 +111,7 @@ def patch_finish_reason_none_branch() -> None:
         return
     patched = text.replace(OLD, NEW, 1)
     TARGET.write_text(patched)
-    print(f"patch-lightspeed-log-exception: inserted logger.error( diagnostic in the finish_reason-is-None branch of {TARGET}")
+    print(f"patch-lightspeed-log-exception: inserted sys.stderr.write diagnostic in the finish_reason-is-None branch of {TARGET}")
 
 
 def main() -> int:
