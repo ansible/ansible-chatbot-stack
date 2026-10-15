@@ -22,14 +22,8 @@ mcp_servers:
   # A literal Bearer token is treated as a secret-file path and is skipped.
   authorization_headers:
     X-Authorization: "client"
-# TEMPORARY EXPERIMENT (LCORE-4782/AAP-94674): mcp::aap-lightspeed removed to
-# test whether the cancel-scope RuntimeError only occurs with multiple
-# concurrent MCP servers registered (per modelcontextprotocol/python-sdk#577).
-# The lightspeed MCP container still starts (tests/sanity/conftest.py's
-# _start_mcp_servers is unchanged) -- only its registration with the agent
-# is removed here. Revert this once the experiment concludes.
-# - name: mcp::aap-lightspeed
-#   provider_id: model-context-protocol
-#   url: http://localhost:8005/sse
-#   authorization_headers:
-#     X-Authorization: "client"
+- name: mcp::aap-lightspeed
+  provider_id: model-context-protocol
+  url: http://localhost:8005/sse
+  authorization_headers:
+    X-Authorization: "client"
