@@ -24,8 +24,39 @@ import pathlib
 APP_SRC = pathlib.Path("/app-root/src")
 MARKER = "# LCORE-4782-diagnostic-patched"
 
+# Broad logger.error->logger.exception upgrade (prior run) produced zero
+# tracebacks for the 2 persistent sanity-test 500s, meaning the real swallow
+# point doesn't log at all before building the generic response. Dump the
+# likely culprits' full source so the real code can be read from the build
+# log instead of guessed at again. utils/endpoints.py is the prime suspect:
+# "endpoints" + generic-sounding name suggests shared request-handling
+# helpers common to every endpoint (where a catch-all exception wrapper
+# would live).
+DUMP_FILES = [
+    "utils/endpoints.py",
+    "app/main.py",
+    "app/endpoints/query.py",
+    "utils/query.py",
+    "utils/agents/query.py",
+]
+
+
+def dump_file(rel_path: str) -> None:
+    path = APP_SRC / rel_path
+    if not path.exists():
+        print(f"patch-lightspeed-log-exception: DIAGNOSTIC - {path} does not exist")
+        return
+    lines = path.read_text().splitlines()
+    print(f"patch-lightspeed-log-exception: DIAGNOSTIC === BEGIN {path} ({len(lines)} lines) ===")
+    for i, line in enumerate(lines[:400], start=1):
+        print(f"{i}: {line}")
+    print(f"patch-lightspeed-log-exception: DIAGNOSTIC === END {path} ===")
+
 
 def main() -> int:
+    for rel_path in DUMP_FILES:
+        dump_file(rel_path)
+
     try:
         candidates = list(APP_SRC.rglob("*.py"))
     except OSError as exc:
