@@ -1,26 +1,27 @@
 #!/usr/bin/env python3
 """Diagnostic-only patch for debugging LCORE-4782 sanity-test 500s.
 
-Root-caused the swallow point: app/endpoints/query.py catches
-(LLSApiStatusError, OpenAIAPIStatusError) and hands them to
-handle_known_apistatus_errors() in utils/query.py, which is:
+CI run 38669905439 showed the actual failure bodies for the first time:
 
-    error_message = getattr(error, "message", str(error))
-    if is_context_length_error(error_message):
-        return PromptTooLongResponse(model=model_id)
-    if error.status_code == 429:
-        return QuotaExceededResponse.model(model_id)
-    return InternalServerErrorResponse.generic()
+    {"detail":{"response":"Internal server error",
+     "cause":"An unexpected error occurred while processing the request."}}
 
-Any API status error that isn't a context-length error or a 429 falls
-through to a generic response with ZERO logging -- by design, not a bug.
-That's why broadly upgrading logger.error->logger.exception elsewhere
-(still done below, harmless) found nothing: there was never a logging
-call on this fallback path to upgrade. This inserts a new logger.error(
-call right before the generic-fallback return, capturing the real
-status_code/message/body/repr of the discarded error, to find out what's
-actually causing test_tool_filtering_lightspeed_query[openai] and
-test_knowledge_search_always_included[azure] to 500 on every CI run.
+That "cause" string is the literal, hardcoded fallback message in
+utils/agents/query.py's `case _:` arm of whatever function maps an
+AgentFinishReason to an error response (confirmed via build-log context
+dump: lines 179-182, right after handled cases for AgentFinishReason.LENGTH,
+.CONTENT_FILTER and .CANCELLED). 3 of 4 sanity-test failures in that run had
+this exact "cause" string, so this fallback -- not utils/query.py's
+handle_known_apistatus_errors (already ruled out) -- is the real swallow
+point for the remaining LCORE-4782 failures.
+
+This patch:
+  1. Dumps the full utils/agents/query.py source so the enclosing function,
+     the AgentFinishReason enum, and get_agent_finish_reason()'s logic can
+     be read directly instead of guessed at from log snippets.
+  2. Inserts a `print(locals())` right before that fallback's return. Using
+     locals() instead of a named variable means this can't NameError even
+     though the match subject's variable name hasn't been confirmed yet.
 
 See https://redhat.atlassian.net/browse/LCORE-4782. Diagnostic/
 local-verification only -- not meant to land upstream as-is.
@@ -28,107 +29,59 @@ local-verification only -- not meant to land upstream as-is.
 import pathlib
 
 APP_SRC = pathlib.Path("/app-root/src")
-MARKER = "# LCORE-4782-diagnostic-patched"
+TARGET = APP_SRC / "utils" / "agents" / "query.py"
 
-FALLBACK_FILE = APP_SRC / "utils" / "query.py"
-FALLBACK_LINE = "    return InternalServerErrorResponse.generic()"
-FALLBACK_LOG = (
-    '    logger.error("LCORE-4782 diagnostic: generic-fallback status_code=%s '
-    'message=%s body=%r repr=%r", getattr(error, "status_code", None), '
-    'error_message, getattr(error, "body", None), error)\n'
+FALLBACK_OLD = (
+    '            return InternalServerErrorResponse.query_failed(\n'
+    '                "An unexpected error occurred while processing the request."\n'
+    '            )\n'
+)
+FALLBACK_NEW = (
+    '            print(f"LCORE-4782 diagnostic: finish-reason fallback locals={locals()!r}")\n'
+    + FALLBACK_OLD
 )
 
 
-def find_all_generic_error_usages() -> None:
-    """The targeted patch on utils/query.py's fallback never fired, so the
-    real 500 for the 2 persistent failures comes from a different call
-    site entirely. Find every place InternalServerErrorResponse is
-    referenced anywhere in the app source, with context, instead of
-    guessing again."""
+def dump_file(path: pathlib.Path, cap: int = 1000) -> None:
+    if not path.exists():
+        print(f"patch-lightspeed-log-exception: DIAGNOSTIC - {path} does not exist")
+        return
     try:
-        files = list(APP_SRC.rglob("*.py"))
-    except OSError as exc:
-        print(f"patch-lightspeed-log-exception: WARNING - could not walk {APP_SRC} for usage search: {exc}")
+        lines = path.read_text().splitlines()
+    except (OSError, UnicodeDecodeError) as exc:
+        print(f"patch-lightspeed-log-exception: DIAGNOSTIC - could not read {path}: {exc}")
         return
-
-    hits = 0
-    for path in files:
-        try:
-            lines = path.read_text().splitlines()
-        except (OSError, UnicodeDecodeError):
-            continue
-        for i, line in enumerate(lines):
-            if "InternalServerErrorResponse" in line:
-                hits += 1
-                start = max(0, i - 3)
-                end = min(len(lines), i + 4)
-                print(f"patch-lightspeed-log-exception: DIAGNOSTIC - {path}:{i + 1} context:")
-                for j in range(start, end):
-                    marker = ">>" if j == i else "  "
-                    print(f"{marker} {j + 1}: {lines[j]}")
-    print(f"patch-lightspeed-log-exception: DIAGNOSTIC - found {hits} InternalServerErrorResponse reference(s) total under {APP_SRC}")
+    print(f"patch-lightspeed-log-exception: DIAGNOSTIC === BEGIN {path} ({len(lines)} lines) ===")
+    for i, line in enumerate(lines[:cap]):
+        print(f"{i + 1}: {line}")
+    if len(lines) > cap:
+        print(f"patch-lightspeed-log-exception: DIAGNOSTIC - ... truncated, {len(lines) - cap} more lines")
+    print(f"patch-lightspeed-log-exception: DIAGNOSTIC === END {path} ===")
 
 
-def patch_fallback_logging() -> None:
-    if not FALLBACK_FILE.exists():
-        print(f"patch-lightspeed-log-exception: DIAGNOSTIC - {FALLBACK_FILE} does not exist")
+def patch_finish_reason_fallback() -> None:
+    if not TARGET.exists():
+        print(f"patch-lightspeed-log-exception: DIAGNOSTIC - {TARGET} does not exist")
         return
-    text = FALLBACK_FILE.read_text()
-    if "LCORE-4782 diagnostic: generic-fallback" in text:
-        print(f"patch-lightspeed-log-exception: {FALLBACK_FILE} fallback logging already patched, skipping")
+    text = TARGET.read_text()
+    if "LCORE-4782 diagnostic: finish-reason fallback" in text:
+        print(f"patch-lightspeed-log-exception: {TARGET} fallback logging already patched, skipping")
         return
-    count = text.count(FALLBACK_LINE)
+    count = text.count(FALLBACK_OLD)
     if count != 1:
         print(
-            f"patch-lightspeed-log-exception: WARNING - expected exactly 1 occurrence of "
-            f"{FALLBACK_LINE!r} in {FALLBACK_FILE}, found {count}; skipping targeted patch"
+            f"patch-lightspeed-log-exception: WARNING - expected exactly 1 occurrence of the "
+            f"finish-reason fallback block in {TARGET}, found {count}; skipping targeted patch"
         )
         return
-    patched = text.replace(FALLBACK_LINE, FALLBACK_LOG + FALLBACK_LINE, 1)
-    FALLBACK_FILE.write_text(patched)
-    print(f"patch-lightspeed-log-exception: inserted diagnostic logger.error( before generic fallback in {FALLBACK_FILE}")
+    patched = text.replace(FALLBACK_OLD, FALLBACK_NEW, 1)
+    TARGET.write_text(patched)
+    print(f"patch-lightspeed-log-exception: inserted diagnostic print(locals()) before finish-reason fallback in {TARGET}")
 
 
 def main() -> int:
-    find_all_generic_error_usages()
-    patch_fallback_logging()
-
-    try:
-        candidates = list(APP_SRC.rglob("*.py"))
-    except OSError as exc:
-        print(f"patch-lightspeed-log-exception: WARNING - could not walk {APP_SRC}: {exc}")
-        return 0
-
-    print(f"patch-lightspeed-log-exception: scanned {len(candidates)} .py files under {APP_SRC}")
-
-    patched_any = False
-    for target in candidates:
-        try:
-            text = target.read_text()
-        except (OSError, UnicodeDecodeError) as exc:
-            print(f"patch-lightspeed-log-exception: skipping {target} ({exc})")
-            continue
-
-        if "logger.error(" not in text:
-            continue
-        if MARKER in text:
-            print(f"patch-lightspeed-log-exception: {target} already patched, skipping")
-            continue
-
-        count = text.count("logger.error(")
-        patched = text.replace("logger.error(", "logger.exception(")
-        patched = f"{MARKER}\n{patched}"
-        try:
-            target.write_text(patched)
-        except OSError as exc:
-            print(f"patch-lightspeed-log-exception: WARNING - could not write {target}: {exc}")
-            continue
-        patched_any = True
-        print(f"patch-lightspeed-log-exception: upgraded {count} logger.error( call(s) to logger.exception( in {target}")
-
-    if not patched_any:
-        print(f"patch-lightspeed-log-exception: WARNING - scanned {APP_SRC} but found no logger.error( calls to upgrade")
-
+    dump_file(TARGET)
+    patch_finish_reason_fallback()
     return 0  # diagnostic-only: never fail the build
 
 
