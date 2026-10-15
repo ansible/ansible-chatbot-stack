@@ -90,10 +90,33 @@ streaming.py again until this diagnostic confirms raw_finish_reason /
 provider_details are actually empty for the failing case -- confirm
 before fixing.
 
+Run 38678790918: the raise WAS applied cleanly (build log confirmed it),
+but neither "LCORE-4782-MARKER" nor app/main.py's "Uncaught exception in
+endpoint" appeared anywhere, and the failure body was STILL byte-identical
+to every prior run. This is airtight: /app-root/src/utils/agents/query.py
+is NOT the code executing at runtime -- patching it further is pointless
+until we find where the real, live copy of this module actually is.
+
+This iteration adds a build-time import-resolution check, run with the
+exact same interpreter/venv the container will use at runtime (`uv run
+python`). It mimics what `entrypoint.sh` does when it runs
+`$PYTHON /app-root/src/lightspeed_stack.py` directly (which makes Python
+put that script's own directory at sys.path[0]) by inserting
+"/app-root/src" at the front of sys.path, then importing
+`utils.agents.query` and printing its resolved `__file__` plus whether our
+MARKER text is present in the source Python actually loaded. If this
+resolves to a different path than our patched file (or the loaded source
+lacks our edits even though it resolves to the same path -- e.g. a stale
+compiled artifact), that tells us definitively where to look next instead
+of guessing further.
+
 See https://redhat.atlassian.net/browse/LCORE-4782. Diagnostic/
 local-verification only -- not meant to land upstream as-is.
 """
+import importlib
 import pathlib
+import sys
+import traceback
 
 APP_SRC = pathlib.Path("/app-root/src")
 TARGET = APP_SRC / "utils" / "agents" / "query.py"
@@ -132,8 +155,42 @@ def patch_finish_reason_none_branch() -> None:
     print(f"patch-lightspeed-log-exception: inserted raise AssertionError('LCORE-4782-MARKER...') in the finish_reason-is-None branch of {TARGET}")
 
 
+def check_import_resolution() -> None:
+    """Prove (or disprove) that /app-root/src is what Python actually
+    imports from at runtime, using the exact interpreter/venv that will
+    run the app, mimicking entrypoint.sh's own sys.path[0] setup."""
+    src_str = str(APP_SRC)
+    if src_str not in sys.path:
+        sys.path.insert(0, src_str)
+    try:
+        module = importlib.import_module("utils.agents.query")
+    except Exception:
+        print("patch-lightspeed-log-exception: DIAGNOSTIC - import utils.agents.query FAILED:")
+        traceback.print_exc()
+        return
+
+    resolved = getattr(module, "__file__", None)
+    print(f"patch-lightspeed-log-exception: DIAGNOSTIC - utils.agents.query resolves to {resolved!r}")
+    print(f"patch-lightspeed-log-exception: DIAGNOSTIC - expected target was {TARGET}")
+    print(f"patch-lightspeed-log-exception: DIAGNOSTIC - resolved path matches expected target: {resolved == str(TARGET)}")
+
+    if resolved:
+        try:
+            resolved_text = pathlib.Path(resolved).read_text()
+        except OSError as exc:
+            print(f"patch-lightspeed-log-exception: DIAGNOSTIC - could not read resolved file: {exc}")
+        else:
+            print(
+                "patch-lightspeed-log-exception: DIAGNOSTIC - resolved file contains LCORE-4782-MARKER: "
+                f"{'LCORE-4782-MARKER' in resolved_text}"
+            )
+
+    print(f"patch-lightspeed-log-exception: DIAGNOSTIC - full sys.path: {sys.path}")
+
+
 def main() -> int:
     patch_finish_reason_none_branch()
+    check_import_resolution()
     return 0  # diagnostic-only: never fail the build
 
 
