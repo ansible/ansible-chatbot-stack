@@ -1,20 +1,26 @@
 #!/usr/bin/env python3
 """Diagnostic-only patch for debugging LCORE-4782 sanity-test 500s.
 
-lightspeed-stack's /v1/query error handling logs failures with
-`logger.error(...)` (no exception info) instead of `logger.exception(...)`,
-so the real traceback behind a generic HTTP 500 never reaches the logs or
-the response body -- confirmed in earlier debugging of this repo.
+Root-caused the swallow point: app/endpoints/query.py catches
+(LLSApiStatusError, OpenAIAPIStatusError) and hands them to
+handle_known_apistatus_errors() in utils/query.py, which is:
 
-Earlier attempts assumed `lightspeed_stack` lives under
-/app-root/.venv/lib/python3.12/site-packages/ like a normal pip-installed
-package, or is importable as a `lightspeed_stack` package at all. A broad
-scan of /app-root found the real layout: the app is plain source (not
-pip-installed) directly under /app-root/src/ -- e.g.
-/app-root/src/app/endpoints/query.py, /app-root/src/utils/agents/query.py,
-/app-root/src/utils/query.py -- with no `lightspeed_stack` package name
-anywhere in the path. This version targets /app-root/src directly. NEVER
-fails the build -- this is a diagnostic aid, not a real fix.
+    error_message = getattr(error, "message", str(error))
+    if is_context_length_error(error_message):
+        return PromptTooLongResponse(model=model_id)
+    if error.status_code == 429:
+        return QuotaExceededResponse.model(model_id)
+    return InternalServerErrorResponse.generic()
+
+Any API status error that isn't a context-length error or a 429 falls
+through to a generic response with ZERO logging -- by design, not a bug.
+That's why broadly upgrading logger.error->logger.exception elsewhere
+(still done below, harmless) found nothing: there was never a logging
+call on this fallback path to upgrade. This inserts a new logger.error(
+call right before the generic-fallback return, capturing the real
+status_code/message/body/repr of the discarded error, to find out what's
+actually causing test_tool_filtering_lightspeed_query[openai] and
+test_knowledge_search_always_included[azure] to 500 on every CI run.
 
 See https://redhat.atlassian.net/browse/LCORE-4782. Diagnostic/
 local-verification only -- not meant to land upstream as-is.
@@ -24,41 +30,37 @@ import pathlib
 APP_SRC = pathlib.Path("/app-root/src")
 MARKER = "# LCORE-4782-diagnostic-patched"
 
-# Broad logger.error->logger.exception upgrade (prior run) produced zero
-# tracebacks for the 2 persistent sanity-test 500s, meaning the real swallow
-# point doesn't log at all before building the generic response. Dump the
-# likely culprits' full source so the real code can be read from the build
-# log instead of guessed at again. utils/endpoints.py is the prime suspect:
-# "endpoints" + generic-sounding name suggests shared request-handling
-# helpers common to every endpoint (where a catch-all exception wrapper
-# would live).
-DUMP_FILES = [
-    # utils/query.py:handle_known_apistatus_errors (past line 400, cut off
-    # last run) looks like the real culprit -- converts LLSApiStatusError/
-    # OpenAIAPIStatusError into structured responses, likely falling back
-    # to InternalServerErrorResponse for unrecognized status codes, with
-    # no logging call on that fallback path (hence why upgrading
-    # logger.error calls elsewhere found nothing).
-    "utils/query.py",
-    "models/api/responses/error.py",
-]
+FALLBACK_FILE = APP_SRC / "utils" / "query.py"
+FALLBACK_LINE = "    return InternalServerErrorResponse.generic()"
+FALLBACK_LOG = (
+    '    logger.error("LCORE-4782 diagnostic: generic-fallback status_code=%s '
+    'message=%s body=%r repr=%r", getattr(error, "status_code", None), '
+    'error_message, getattr(error, "body", None), error)\n'
+)
 
 
-def dump_file(rel_path: str) -> None:
-    path = APP_SRC / rel_path
-    if not path.exists():
-        print(f"patch-lightspeed-log-exception: DIAGNOSTIC - {path} does not exist")
+def patch_fallback_logging() -> None:
+    if not FALLBACK_FILE.exists():
+        print(f"patch-lightspeed-log-exception: DIAGNOSTIC - {FALLBACK_FILE} does not exist")
         return
-    lines = path.read_text().splitlines()
-    print(f"patch-lightspeed-log-exception: DIAGNOSTIC === BEGIN {path} ({len(lines)} lines) ===")
-    for i, line in enumerate(lines[:1000], start=1):
-        print(f"{i}: {line}")
-    print(f"patch-lightspeed-log-exception: DIAGNOSTIC === END {path} ===")
+    text = FALLBACK_FILE.read_text()
+    if "LCORE-4782 diagnostic: generic-fallback" in text:
+        print(f"patch-lightspeed-log-exception: {FALLBACK_FILE} fallback logging already patched, skipping")
+        return
+    count = text.count(FALLBACK_LINE)
+    if count != 1:
+        print(
+            f"patch-lightspeed-log-exception: WARNING - expected exactly 1 occurrence of "
+            f"{FALLBACK_LINE!r} in {FALLBACK_FILE}, found {count}; skipping targeted patch"
+        )
+        return
+    patched = text.replace(FALLBACK_LINE, FALLBACK_LOG + FALLBACK_LINE, 1)
+    FALLBACK_FILE.write_text(patched)
+    print(f"patch-lightspeed-log-exception: inserted diagnostic logger.error( before generic fallback in {FALLBACK_FILE}")
 
 
 def main() -> int:
-    for rel_path in DUMP_FILES:
-        dump_file(rel_path)
+    patch_fallback_logging()
 
     try:
         candidates = list(APP_SRC.rglob("*.py"))
@@ -67,9 +69,6 @@ def main() -> int:
         return 0
 
     print(f"patch-lightspeed-log-exception: scanned {len(candidates)} .py files under {APP_SRC}")
-    if not candidates:
-        print(f"patch-lightspeed-log-exception: WARNING - {APP_SRC} doesn't exist or is empty; skipping patch")
-        return 0
 
     patched_any = False
     for target in candidates:
