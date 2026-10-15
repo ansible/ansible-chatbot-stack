@@ -46,7 +46,19 @@ project_llama_stack_0_6_upgrade.md).
 See https://redhat.atlassian.net/browse/LCORE-4782 and the related
 https://redhat.atlassian.net/browse/AAP-94674. Diagnostic/local-verification
 only -- not meant to land upstream as-is.
+
+UPDATE (2026-10-15): confirmed via a single-MCP-server CI experiment that
+this is specifically a multi-MCP-server teardown-ordering bug, matching
+https://github.com/modelcontextprotocol/python-sdk/issues/577 and
+https://github.com/pydantic/pydantic-ai/issues/2818. The latter was fixed
+upstream in pydantic-ai PR #4514 (merged ~April 2026), which switched
+MCPServer to per-context connections so cancel scopes are always entered
+and exited on the same task. check_pydantic_ai_version() below is a
+build-time-only check (no source patch) to see whether the pydantic-ai/
+pydantic-graph versions bundled in the lightspeed-stack:0.6.2 base image
+predate that fix.
 """
+import importlib.metadata
 import pathlib
 
 APP_SRC = pathlib.Path("/app-root/src")
@@ -92,8 +104,19 @@ def patch_map_agent_inference_error() -> None:
     print(f"patch-lightspeed-log-exception: embedded full traceback into map_agent_inference_error's fallback in {TARGET}")
 
 
+def check_pydantic_ai_version() -> None:
+    for package in ("pydantic-ai", "pydantic-graph", "anyio", "mcp"):
+        try:
+            version = importlib.metadata.version(package)
+        except importlib.metadata.PackageNotFoundError:
+            print(f"patch-lightspeed-log-exception: DIAGNOSTIC - package {package!r} not found")
+            continue
+        print(f"patch-lightspeed-log-exception: DIAGNOSTIC - {package}=={version}")
+
+
 def main() -> int:
     patch_map_agent_inference_error()
+    check_pydantic_ai_version()
     return 0  # diagnostic-only: never fail the build
 
 
