@@ -332,6 +332,13 @@ class TestMCPSanity:
                 f"filtered={names[:20]!r}"
             )
 
+    @pytest.mark.skip(
+        reason="TEMPORARY (LCORE-4782/AAP-94674): mcp::aap-lightspeed is not "
+        "registered with the agent for this single-MCP-server cancel-scope "
+        "experiment, so no lightspeed tool family can ever be filtered in. "
+        "Re-enable once the experiment concludes and mcp-lightspeed-stack.yaml "
+        "is reverted."
+    )
     def test_tool_filtering_lightspeed_query(
         self, base_url, mcp_provider_setup, mcp_filter_debug
     ):
