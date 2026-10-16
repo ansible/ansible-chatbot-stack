@@ -7,8 +7,8 @@
       "allowedVersions": "<2"
     },
     {
-      "description": "faiss-cpu and lightspeed-stack-providers are coupled to the runtime environment and require manual validation before upgrading (see #359, #360).",
-      "matchPackageNames": ["lightspeed-stack-providers", "faiss-cpu"],
+      "description": "faiss-cpu, lightspeed-stack-providers, and the lightspeed-stack base image are coupled to the runtime environment and require manual validation before upgrading (see #359, #360, #430).",
+      "matchPackageNames": ["lightspeed-stack-providers", "faiss-cpu", "quay.io/lightspeed-core/lightspeed-stack"],
       "enabled": false
     },
     {
