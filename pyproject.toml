@@ -13,7 +13,7 @@ dependencies = [
     "lightspeed-stack-providers==0.5.4",
     "litellm==1.91.5", # Pinned below versions with Rust deps to avoid downstream build changes (>=1.84.0 still covers CVE-2026-49468); future litellm CVE fixes will likely only land in compiled releases, so this cap may need revisiting then
     "mcp>=1.28.1,<2",
-    "pillow==12.3.0", # Transient dep pinned to handle CVE (CVE-2026-59197, CVE-2026-54058, CVE-2026-54060, CVE-2026-55380, CVE-2026-55379)
+    "pillow==13.0.0", # Transient dep pinned to handle CVE (CVE-2026-59197, CVE-2026-54058, CVE-2026-54060, CVE-2026-55380, CVE-2026-55379)
     "python-dotenv>=1.2.2", # Transient dep pinned to handle CVE
     "pyasn1>=0.6.4", # Bumped for CVE-2026-59886
     "pyjwt[crypto]==2.15.1", # Transient dep pinned to handle CVE
