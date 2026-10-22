@@ -12,7 +12,7 @@ images:
   newTag: 0.9.202610201459
 - name: ansible-mcp-controller
   newName: quay.io/ansible/ansible-mcp-controller
-  newTag: 0.9.202610201459
+  newTag: 0.9.202610211318
 - name: ansible-mcp-lightspeed
   newName: quay.io/ansible/ansible-mcp-lightspeed
   newTag: 0.9.202610201459
