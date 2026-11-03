@@ -257,7 +257,7 @@ requires-dist = [
     { name = "dumb-init", specifier = ">=1.2.5.post1" },
     { name = "faiss-cpu", specifier = "==1.12" },
     { name = "fsspec", specifier = ">=2026.6.0" },
-    { name = "joserfc", specifier = ">=1.6.8" },
+    { name = "joserfc", specifier = ">=1.7.6" },
     { name = "lightspeed-stack-providers", specifier = "==0.5.4" },
     { name = "litellm", specifier = "==1.102.2" },
     { name = "mcp", specifier = ">=1.28.1,<2" },
