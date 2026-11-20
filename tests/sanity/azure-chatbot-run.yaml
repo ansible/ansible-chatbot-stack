@@ -4,10 +4,10 @@ container_image: ansible-chatbot-sanity-azure
 apis:
 - inference
 - vector_io
-- safety
-- agents
-- datasetio
+- responses
+- batches
 - tool_runtime
+- conversations
 - files
 providers:
   inference:
@@ -27,31 +27,21 @@ providers:
       persistence:
         namespace: vector_io::faiss
         backend: kv_rag
-  safety:
-  - provider_id: llama-guard
-    provider_type: inline::llama-guard
-    config:
-      excluded_categories: []
-  agents:
-  - provider_id: lightspeed_inline_agent
-    provider_type: inline::lightspeed_inline_agent
+  responses:
+  - provider_id: builtin
+    provider_type: inline::builtin
     config:
       persistence:
-        agent_state:
-          namespace: agents_state
-          backend: kv_default
         responses:
-          table_name: agent_responses
+          table_name: agents_responses
           backend: sql_default
-      tools_filter:
-        enabled: false
-  datasetio:
-  - provider_id: localfs
-    provider_type: inline::localfs
+  batches:
+  - provider_id: reference
+    provider_type: inline::reference
     config:
-      kvstore:
-        namespace: localfs_datasetio
-        backend: kv_default
+      sqlstore:
+        table_name: batches
+        backend: sql_default
   files:
   - provider_id: meta-reference-files
     provider_type: inline::localfs
@@ -61,8 +51,8 @@ providers:
         table_name: files_metadata
         backend: sql_default
   tool_runtime:
-  - provider_id: rag-runtime
-    provider_type: inline::rag-runtime
+  - provider_id: file-search
+    provider_type: inline::file-search
     config: {}
 storage:
   backends:
@@ -88,8 +78,11 @@ storage:
       table_name: openai_conversations
       backend: sql_default
     prompts:
-      namespace: prompts
-      backend: kv_default
+      table_name: prompts
+      backend: sql_default
+    connectors:
+      table_name: connectors
+      backend: sql_default
 registered_resources:
   models:
     - metadata:
@@ -102,22 +95,15 @@ registered_resources:
   vector_stores:
     - metadata: {}
       vector_store_id: ${env.PROVIDER_VECTOR_DB_ID:=}
-      embedding_model: sentence-transformers/${env.EMBEDDINGS_MODEL:=/.llama/data/embeddings_model}
+      embedding_model: sentence-transformers/all-mpnet-base-v2
       embedding_dimension: 384
       provider_id: aap_faiss
-  datasets: []
-  scoring_fns: []
-  benchmarks: []
-  tool_groups:
-    - toolgroup_id: builtin::rag
-      provider_id: rag-runtime
-  safety:
-    - default_shield_id: llama-guard
+  tool_groups: []
 vector_stores:
   default_provider_id: aap_faiss
   default_embedding_model:
     provider_id: sentence-transformers
-    model_id: /.llama/data/embeddings_model
+    model_id: all-mpnet-base-v2
   annotation_prompt_params:
     enable_annotations: true
     annotation_instruction_template: >
@@ -132,4 +118,3 @@ server:
   tls_cafile: null
   auth: null
   disable_ipv6: false
-external_providers_dir: ${env.EXTERNAL_PROVIDERS_DIR:=/.llama/providers.d}
