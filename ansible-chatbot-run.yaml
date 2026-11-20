@@ -108,7 +108,7 @@ registered_resources:
   vector_stores:
     - metadata: {}
       vector_store_id: ${env.PROVIDER_VECTOR_DB_ID:=}
-      embedding_model: sentence-transformers/${env.EMBEDDINGS_MODEL:=/.llama/data/embeddings_model}
+      embedding_model: sentence-transformers/all-mpnet-base-v2
       embedding_dimension: 768
       provider_id: aap_faiss
   tool_groups: []
@@ -116,7 +116,7 @@ vector_stores:
   default_provider_id: aap_faiss
   default_embedding_model:
     provider_id: sentence-transformers
-    model_id: /.llama/data/embeddings_model
+    model_id: all-mpnet-base-v2
   annotation_prompt_params:
     enable_annotations: true
     annotation_instruction_template: >
