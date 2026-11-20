@@ -10,7 +10,6 @@ dependencies = [
     "dumb-init>=1.2.5.post1",
     "faiss-cpu==1.12",
     "fsspec>=2026.6.0", # CVE-2026-104851
-    "lightspeed-stack-providers==0.5.4",
     "litellm==1.102.2", # Bumped for CVE-2026-93355
     "mcp>=1.28.1,<2",
     "pillow==13.0.0", # Transient dep pinned to handle CVE (CVE-2026-59197, CVE-2026-54058, CVE-2026-54060, CVE-2026-55380, CVE-2026-55379)

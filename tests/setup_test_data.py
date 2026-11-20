@@ -100,10 +100,10 @@ async def _write_faiss_vector_db(db_path: Path, model, vector_store_id: str, doc
     never loaded at query time. Driving the real classes guarantees the on-disk format
     always matches whatever llama-stack version is installed.
     """
-    from llama_stack.core.storage.datatypes import SqliteKVStoreConfig
-    from llama_stack.core.storage.kvstore.sqlite.sqlite import SqliteKVStoreImpl
-    from llama_stack.providers.inline.vector_io.faiss.faiss import VECTOR_DBS_PREFIX, FaissIndex
-    from llama_stack_api import ChunkMetadata, EmbeddedChunk, VectorStore
+    from ogx.core.storage.datatypes import SqliteKVStoreConfig
+    from ogx.core.storage.kvstore.sqlite.sqlite import SqliteKVStoreImpl
+    from ogx.providers.inline.vector_io.faiss.faiss import VECTOR_DBS_PREFIX, FaissIndex
+    from ogx_api import ChunkMetadata, EmbeddedChunk, VectorStore
 
     if db_path.exists():
         db_path.unlink()
