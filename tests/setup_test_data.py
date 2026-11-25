@@ -3,7 +3,7 @@
 Setup script to create test data for integration tests.
 
 This script:
-1. Downloads the public all-MiniLM-L6-v2 embeddings model from HuggingFace
+1. Downloads the public all-mpnet-base-v2 embeddings model from HuggingFace
 2. Creates a minimal FAISS vector database in llama-stack's SQLite format
 
 This allows tests to run without needing access to private container registries.
@@ -57,7 +57,7 @@ def setup_embeddings_model(target_dir: Path):
 
     print(f"📦 Downloading embeddings model...")
 
-    model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+    model = SentenceTransformer('sentence-transformers/all-mpnet-base-v2')
 
     # Wipe any existing directory first: model.save() does not clear stale
     # files, so a leftover file from a previous model revision (e.g. an old
