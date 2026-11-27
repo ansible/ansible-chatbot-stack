@@ -6,7 +6,7 @@ ARG GIT_COMMIT=git-commit-not-defined
 # ======================================================
 # Transient image to construct Python venv
 # ------------------------------------------------------
-FROM quay.io/lightspeed-core/lightspeed-stack:0.5.4 AS builder
+FROM quay.io/lightspeed-core/lightspeed-stack:0.7.3 AS builder
 
 ARG APP_ROOT=/app-root
 WORKDIR /app-root
@@ -62,7 +62,7 @@ COPY --from=builder --chown=1001:1001 /app-root /app-root
 # this directory is checked by ecosystem-cert-preflight-checks task in Konflux
 COPY --from=builder /app-root/LICENSE.md /licenses/
 
-ENV LLAMA_STACK_CONFIG_DIR=/.llama/data
+ENV OGX_CONFIG_DIR=/.llama/data
 
 # Data and configuration
 RUN mkdir -p /.llama/distributions/ansible-chatbot
